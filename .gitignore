@@ -216,3 +216,6 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# split-pipe zip
+docker/split_pipe/split-pipe-v*.zip
