@@ -42,14 +42,8 @@ docker
 
 ## Acquiring split-pipe software
 
-`split-pipe` is a proprietary pipeline owned by Parse Biosciences and licensed to DNAStack. Community users therefore must acquire their own license directly from Parse Biosciences if they wish to replicate this workflow. For DNAstack internal use, `split-pipe` is stored in a private Google bucket and must be fetched before building the Docker image:  
+`split-pipe` is a proprietary pipeline owned by Parse Biosciences and licensed to DNAStack. Community users therefore must acquire their own license directly from Parse Biosciences if they wish to replicate this workflow. For DNAstack internal use, `split-pipe` is stored in a private Google bucket and must be saved into `/docker/split_pipe/split-pipe-{version_number}.zip`.
 
-```bash
-# From repo root
-./docker/split_pipe/fetch_split_pipe.sh
-```
-
-This will save a `split-pipe-{version_number}.zip` into `/docker/split-pipe/` which the Dockerfile will copy into the image to build `split-pipe`.
 
 ## The `build.env` file
 
