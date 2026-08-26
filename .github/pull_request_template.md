@@ -13,6 +13,7 @@
 - [ ] documentation updated
 - [ ] `miniwdl check` passed
 - [ ] `womtool validate` passed
+- [ ] Human reviewed any code produced or modified by AI
 
 
 ## Testing
