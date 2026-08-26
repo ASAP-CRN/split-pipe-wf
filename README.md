@@ -62,7 +62,7 @@ Docker images can be build using the [`build_docker_images`](https://github.com/
 
 ```bash
 # Build a single image
-./build_docker_images -d docker/split-pipe
+./build_docker_images -d docker/split_pipe
 
 # Build all images in the `docker` directory
 ./build_docker_images -d docker
@@ -76,4 +76,4 @@ Docker images can be build using the [`build_docker_images`](https://github.com/
 
 | Image | Major tool versions | Links |
 | :- | :- | :- |
-| split-pipe | <ul><li>[split-pipe v1.8.2 (login required)](https://support.parsebiosciences.com/hc/en-us/articles/17200056667924-Pipeline-Download-Current-Version)</li><li>[google-cloud-cli 572.0.0](https://docs.cloud.google.com/sdk/docs/release-notes#57200_2026-06-09)</li><li>[python 3.12.8](https://www.python.org/downloads/release/python-3128/)</li><li>[miniconda 26.5.3](https://docs.anaconda.com/miniconda/miniconda-release-notes/)</li></ul> | [Dockerfile](https://github.com/ASAP-CRN/split-pipe-wf/tree/main/docker/split_pipe) |
+| split_pipe | <ul><li>[split-pipe v1.8.2 (login required)](https://support.parsebiosciences.com/hc/en-us/articles/17200056667924-Pipeline-Download-Current-Version)</li><li>[google-cloud-cli 572.0.0](https://docs.cloud.google.com/sdk/docs/release-notes#57200_2026-06-09)</li><li>[python 3.12.8](https://www.python.org/downloads/release/python-3128/)</li><li>[miniconda 26.5.3](https://docs.anaconda.com/miniconda/miniconda-release-notes/)</li></ul> | [Dockerfile](https://github.com/ASAP-CRN/split-pipe-wf/tree/main/docker/split_pipe) |

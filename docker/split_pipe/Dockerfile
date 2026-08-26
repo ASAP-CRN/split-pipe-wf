@@ -3,13 +3,13 @@ ARG MINICONDA_VERSION
 # Unzip the split-pipe source code and copy it into the image
 FROM ubuntu:jammy AS tools
 
-ARG SPLITPIPE_VERSION
+ARG SPLIT_PIPE_VERSION
 
 RUN apt-get -yq update \
     && apt-get -yq install unzip \
     && rm -rf /var/lib/apt/lists/*
 
-COPY split-pipe-v${SPLITPIPE_VERSION}.zip /tmp/split-pipe.zip
+COPY split-pipe-v${SPLIT_PIPE_VERSION}.zip /tmp/split-pipe.zip
 RUN unzip /tmp/split-pipe.zip -d /tmp/split-pipe-extracted \
     && mv /tmp/split-pipe-extracted/*/ /opt/split-pipe \
     && rm -rf /tmp/split-pipe-extracted
@@ -22,7 +22,7 @@ ENV IMAGE_NAME "${IMAGE_NAME}"
 ARG IMAGE_TAG
 ENV IMAGE_TAG "${IMAGE_TAG}"
 
-LABEL MAINTAINER="Alexander Morin <alexander.morin@dnastack.com>"
+LABEL maintainer="bioinformatics@dnastack.com"
 
 ARG PYTHON_VERSION
 ENV CONDA_PLUGINS_AUTO_ACCEPT_TOS=true
