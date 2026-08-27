@@ -1,0 +1,13 @@
+{
+    "split_pipe_wf.mode": "String",
+    "split_pipe_wf.dryrun": "Boolean",
+    "split_pipe_wf.chemistry": "String",
+    "split_pipe_wf.kit": "String",
+    "split_pipe_wf.fq1": "Array[File]",
+    "split_pipe_wf.fq2": "Array[File]",
+    "split_pipe_wf.sample_loading_table": "File",
+    "split_pipe_wf.organism": "String",
+    "split_pipe_wf.genome_name": "String",
+    "split_pipe_wf.reference_genome": "File",
+    "split_pipe_wf.container_registry": "String"
+}
