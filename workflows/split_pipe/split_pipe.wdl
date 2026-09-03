@@ -27,14 +27,10 @@ workflow split_pipe_wf {
 
 task make_reference {
     input {
-        String organism
         File genome_fasta
         File genes_gtf
-
-        # TODO: why in this block
-        # String billing_project
-		# String container_registry
-		# String zones
+		String container_registry
+		String zones
     }
 
     String genome_name = if organism == "human" then "hg38" else "mm10"
@@ -67,8 +63,8 @@ task make_reference {
         docker: "~{container_registry}/split-pipe:1.8.2"
         cpu: threads
         # cpuPlatform: "Intel Cascade Lake"  # TODO: necessary?
-        memory: "{~mem_gb} GB"
-        disks "local-disk ~{disk_size} HDD"
+        memory: "~{mem_gb} GB"
+        disks: "local-disk ~{disk_size} HDD"
         bootDiskSizeGb: 40
         zones: zones
     }
@@ -88,8 +84,7 @@ task make_reference {
 
 task split_pipe {
     input {
-        # TODO: outside of this block?
-        File genome_ref_tar_gz = "genome_ref.tar.gz"
+        File genome_ref_tar_gz = "genome_ref.tar.gz"   # TODO: outside of this block?
         String mode = "all"
 
         String sublibrary_id
@@ -104,20 +99,19 @@ task split_pipe {
     command <<<
         set -euo pipefail
 
-        # TODO: ensure genome_ref directory exists after extraction
+        # Extract the genome reference dir and make the output sublibrary dir
         tar -xzf ~{genome_ref_tar_gz}
-
         mkdir ~{sublibrary_id}
 
         split-pipe \
             --mode ~{mode} \
             --chemistry ~{chemistry} \
-            --kit ~{kit} \    
+            --kit ~{kit} \
             --fq1 ~{fastqs_R1s} \
             --fq2 ~{fastqs_R2s} \
             --genome_dir genome_ref \
             --output_dir ~{sublibrary_id} \
-            --samp_list ~{sample_table}
+            --samp_list ~{sample_table} \
             --parfile ~{parameter_file}                 
             --dryrun      # To be removed after testing
 
@@ -133,13 +127,13 @@ task split_pipe {
         cpu: threads
         # cpuPlatform: "Intel Cascade Lake"  # TODO: necessary?
         memory: "{~mem_gb} GB"
-        disks "local-disk ~{disk_size} HDD"
+        disks: "local-disk ~{disk_size} HDD"
         bootDiskSizeGb: 40
         zones: zones
     }
 
     meta {
-        description = "Run split-pipe on the given sublibrary."
+        description = "Run split-pipe on the given sublibrary."  # TODO: more detail
     }
 
     # TODO: add options
@@ -152,3 +146,51 @@ task split_pipe {
         sample_table: {help: "Path to the sample table file."}
         parameter_file: {help: "Optional path to the parameter file."}
     }
+}
+
+
+task combine_sublibraries {
+    input {
+        Array[File] sublibrary_tars
+        Array[String] sublibrary_ids
+    }
+    # File of sublib dir paths to be fed as input to split-pipe combine
+    File sublib_list = write_lines(sublibrary_ids)
+
+    command <<<
+    set -euo pipefail
+
+    # Extract each sublibrary .tar.gz into sublibs/
+    mkdir -p sublibs
+    ids=(~{sep=" " sublibrary_ids})  #  TODO: ask vs. write_lines()
+    tars=(~{sep=" " sublibrary_tars})
+    for i in "${!tars_array[@]}"; do
+        mkdir -p "sublibs/${ids[$i]}"
+        tar -xzf "${tars[$i]}" -C "sublibs/${ids[$i]}"
+    done
+
+    split-pipe \
+        --mode comb \
+        --sublib_list ~{sublib_list} \
+        --sublib_pref "$PWD/sublibs/" \  # Prefix for the parent sublib dir
+        --output_dir combined_sublibs
+
+    tar -czf combined_sublibs.tar.gz combined_sublibs
+    >>>
+
+    output {
+        File combined_sublibs_tar_gz = "combined_sublibs.tar.gz"
+    }
+
+    meta {
+        description = "Combine multiple sublibraries into a one combined object."
+    }
+
+
+
+
+
+
+
+
+     
