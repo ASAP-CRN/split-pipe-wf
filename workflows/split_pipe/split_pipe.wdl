@@ -7,7 +7,7 @@ import "../structs.wdl"
 
 workflow split_pipe_wf {
     input {
-        Array[Sample] samples
+        Array[Sublibrary] sublibraries
         String organism
         File genome_fasta
         File genes_gtf
@@ -22,8 +22,6 @@ workflow split_pipe_wf {
 		String zones
     }
 
-    Array[String] sublibrary_ids = samples.sublibrary_id
-
     # Build reference genome index
     call make_reference {
         input:
@@ -35,38 +33,47 @@ workflow split_pipe_wf {
     }
 
     # Run split-pipe on each sublibrary
-    scatter (sample in samples) {
+    scatter (sublibrary in sublibraries) {
+        String sublibrary_id = sublibrary.sublibrary_id  # Declare as gathered for array input for combine_sublibraries
+        
         call split_pipe {
             input:
                 genome_ref_tar_gz = make_reference.genome_ref_tar_gz,
                 mode = mode,
-                sublibrary_id = sample.sublibrary_id,
+                sublibrary_id = sublibrary_id,
                 chemistry = chemistry,
                 kit = kit,
-                fastq_R1s = sample.fastq_R1s,
-                fastq_R2s = sample.fastq_R2s,
+                fastq_R1s = sublibrary.fastq_R1s,
+                fastq_R2s = sublibrary.fastq_R2s,
                 sample_table = sample_table,
-                parameter_file = parameter_file
+                parameter_file = parameter_file,
+                container_registry = container_registry,
+                zones = zones
         }
+    }
+
+    Array[String] sublibrary_ids = sublibrary_id
 
     # Combine the output sublibaries into one object
     call combine_sublibraries {
         input:
-            sublibrary_tars = split_pipe.sublibrary_tar_gz  # Gathered Array[File] from the split-pipe scatter
-            sublibrary_ids = sublibrary_ids
+            sublibrary_tars = split_pipe.sublibrary_tar_gz,  # Gathered Array[File] from the split-pipe scatter
+            sublibrary_ids = sublibrary_ids,
+            container_registry = container_registry,
+            zones = zones
     }
 
     output {
         # TODO: Output uncompressed directory with all outputs declared?
-        File combined_sublibrary_tar_gz = combine_sublibraries.combined_sublibrary_tar_gz
+        File combined_sublibrary_tar_gz = combine_sublibraries.combined_sublibs_tar_gz
     }
 
     meta {
-        description = "This workflow create the indexed reference genome, runs split-pipe on each sublibrary and combines the results into a single object."
+        description: "This workflow create the indexed reference genome, runs split-pipe on each sublibrary and combines the results into a single object."
     }
 
     parameter_meta {
-        samples: {help: "Array of sample structs containing sublibrary IDs and FASTQ file paths."}
+        sublibraries: {help: "Array of sublibrary structs containing sublibrary IDs and FASTQ file paths."}
         organism: {help: "Organism; used to select which reference genome is used. Either 'human' (hg38) or 'mouse' (mm10)."}
         genome_fasta: {help: "Path to the reference genome FASTA file."}
         genes_gtf: {help: "Path to the reference gene annotation GTF file."}
@@ -91,7 +98,6 @@ task make_reference {
     }
 
     String genome_name = if organism == "human" then "hg38" else "mm10"
-
     Int threads = 16
     Int mem_gb = 48
     Int disk_size = 50
@@ -106,7 +112,8 @@ task make_reference {
             --genome_name ~{genome_name} \
             --fasta ~{genome_fasta} \
             --genes ~{genes_gtf} \
-            --output_dir genome_ref
+            --output_dir genome_ref \
+            --nthreads ~{threads}
 
         tar -czf genome_ref.tar.gz genome_ref
     >>>
@@ -117,9 +124,9 @@ task make_reference {
     }
 
     runtime {
-        docker: "~{container_registry}/split-pipe:1.8.2"
+        docker: "~{container_registry}/split_pipe:1.8.2"
         cpu: threads
-        cpuPlatform: "Intel Cascade Lake"  # TODO: necessary?
+        cpuPlatform: "Intel Cascade Lake"
         memory: "~{mem_gb} GB"
         disks: "local-disk ~{disk_size} HDD"
         bootDiskSizeGb: 40
@@ -127,7 +134,7 @@ task make_reference {
     }
 
     meta {
-        description = "Make reference genome index from FASTA and GTF files."
+        description: "Make reference genome index from FASTA and GTF files."
     }
 
     parameter_meta {
@@ -141,7 +148,7 @@ task make_reference {
 
 task split_pipe {
     input {
-        File genome_ref_tar_gz = "genome_ref.tar.gz"   # TODO: outside of this block?
+        File genome_ref_tar_gz
         String mode = "all"
         String sublibrary_id
         String chemistry
@@ -155,8 +162,8 @@ task split_pipe {
     }
 
     Int threads = 16
-    Int mem_gb = 48     # TODO: appropriate?
-    Int disk_size = 50  # TODO: Much larger 
+    Int mem_gb = 48
+    Int disk_size = ceil((size(genome_ref_tar_gz, "GB") + size(flatten([fastq_R1s, fastq_R2s]), "GB")) * 4 + 50)
 
     command <<<
         set -euo pipefail
@@ -169,13 +176,14 @@ task split_pipe {
             --mode ~{mode} \
             --chemistry ~{chemistry} \
             --kit ~{kit} \
-            --fq1 ~{fastq_R1s} \
-            --fq2 ~{fastq_R2s} \
+            --fq1 ~{sep=" " fastq_R1s} \
+            --fq2 ~{sep=" " fastq_R2s} \
             --genome_dir genome_ref \
             --output_dir ~{sublibrary_id} \
             --samp_list ~{sample_table} \
-            --parfile ~{parameter_file} \
-            --dryrun      # To be removed after testing
+            --nthreads ~{threads} \
+            ~{if defined(parameter_file) then "--parfile " + select_first([parameter_file]) else ""} \
+            --dryrun      # TODO: remove after testing
 
         tar -czf ~{sublibrary_id}.tar.gz ~{sublibrary_id}        
     >>>
@@ -185,17 +193,17 @@ task split_pipe {
     }
 
     runtime {
-        docker: "~{container_registry}/split-pipe:1.8.2"
+        docker: "~{container_registry}/split_pipe:1.8.2"
         cpu: threads
-        cpuPlatform: "Intel Cascade Lake"  # TODO: necessary?
-        memory: "{~mem_gb} GB"
+        cpuPlatform: "Intel Cascade Lake"
+        memory: "~{mem_gb} GB"
         disks: "local-disk ~{disk_size} HDD"
         bootDiskSizeGb: 40
         zones: zones
     }
 
     meta {
-        description = "Run split-pipe on the given sublibrary."  # TODO: more detail
+        description: "Run split-pipe on the given sublibrary."  # TODO: more detail
     }
 
     # TODO: add options
@@ -203,8 +211,8 @@ task split_pipe {
         sublibrary_id: {help: "Identifier for the sublibrary being processed."}
         chemistry: {help: "Chemistry used for the sublibrary."}
         kit: {help: "Kit used for the sublibrary."}
-        fastqs_R1s: {help: "Array of FASTQ files for read 1."}
-        fastqs_R2s: {help: "Array of FASTQ files for read 2."}
+        fastq_R1s: {help: "Array of FASTQ files for read 1."}
+        fastq_R2s: {help: "Array of FASTQ files for read 2."}
         sample_table: {help: "Path to the sample table file."}
         parameter_file: {help: "Optional path to the parameter file."}
     }
@@ -219,30 +227,29 @@ task combine_sublibraries {
         String zones
     }
     
-    # File of sublib dir paths to be fed as input to split-pipe combine
     File sublib_list = write_lines(sublibrary_ids)
-    
     Int threads = 16
-    Int mem_gb = 48     # TODO: appropriate?
-    Int disk_size = 50  # TODO: Much larger
+    Int mem_gb = 48  # TODO: Revisit, PB docs bin at 64/128/256 GB
+    Int disk_size = ceil(size(sublibrary_tars, "GB") * 8 + 50)  # TODO: 8x for unpacking each tar + the final combined object - revisit 
 
     command <<<
         set -euo pipefail
 
         # Extract each sublibrary .tar.gz into sublibs/
         mkdir -p sublibs
-        ids=(~{sep=" " sublibrary_ids})  #  TODO: ask vs. write_lines()
-        tars=(~{sep=" " sublibrary_tars})
+        ids_array=(~{sep=" " sublibrary_ids})
+        tars_array=(~{sep=" " sublibrary_tars})
         for i in "${!tars_array[@]}"; do
-            mkdir -p "sublibs/${ids[$i]}"
-            tar -xzf "${tars[$i]}" -C "sublibs/${ids[$i]}"
+            mkdir -p "sublibs/${ids_array[$i]}"
+            tar -xzf "${tars_array[$i]}" -C "sublibs/${ids_array[$i]}"
         done
 
         split-pipe \
             --mode comb \
             --sublib_list ~{sublib_list} \
-            --sublib_pref "$PWD/sublibs/" \  # Prefix for the parent sublib dir
-            --output_dir combined_sublibs
+            --sublib_pref "$PWD/sublibs/" \
+            --output_dir combined_sublibs \
+            --nthreads ~{threads}
 
         # TODO: Full directory with all outputs declared?
         tar -czf combined_sublibs.tar.gz combined_sublibs
@@ -253,20 +260,21 @@ task combine_sublibraries {
     }
 
     runtime {
-        docker: "~{container_registry}/split-pipe:1.8.2"
+        docker: "~{container_registry}/split_pipe:1.8.2"
         cpu: threads
-        cpuPlatform: "Intel Cascade Lake"  # TODO: necessary?
-        memory: "{~mem_gb} GB"
+        cpuPlatform: "Intel Cascade Lake"
+        memory: "~{mem_gb} GB"
         disks: "local-disk ~{disk_size} HDD"
         bootDiskSizeGb: 40
         zones: zones
     }
 
     meta {
-        description = "Combine multiple sublibraries into a one combined object."
+        description: "Combine multiple sublibraries into a single combined object."
     }
 
     parameter_meta {
         sublibrary_tars: {help: "Array of sublibrary tar.gz files to be combined."}
         sublibrary_ids: {help: "Array of sublibrary identifiers corresponding to the tar.gz files."}
     }
+}
