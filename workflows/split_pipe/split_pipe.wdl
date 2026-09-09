@@ -12,10 +12,9 @@ workflow split_pipe_wf {
         File genome_fasta
         File genes_gtf
 
-        String mode
         String chemistry
         String kit
-        File sample_table
+        File sample_list_tsv
         File? parameter_file
 		
         String container_registry
@@ -39,13 +38,12 @@ workflow split_pipe_wf {
         call split_pipe {
             input:
                 genome_ref_tar_gz = make_reference.genome_ref_tar_gz,
-                mode = mode,
                 sublibrary_id = sublibrary_id,
                 chemistry = chemistry,
                 kit = kit,
                 fastq_R1s = sublibrary.fastq_R1s,
                 fastq_R2s = sublibrary.fastq_R2s,
-                sample_table = sample_table,
+                sample_list_tsv = sample_list_tsv,
                 parameter_file = parameter_file,
                 container_registry = container_registry,
                 zones = zones
@@ -65,7 +63,7 @@ workflow split_pipe_wf {
 
     output {
         # TODO: Output uncompressed directory with all outputs declared?
-        File combined_sublibrary_tar_gz = combine_sublibraries.combined_sublibs_tar_gz
+        File combined_sublibs_tar_gz = combine_sublibraries.combined_sublibs_tar_gz
     }
 
     meta {
@@ -77,10 +75,9 @@ workflow split_pipe_wf {
         organism: {help: "Organism; used to select which reference genome is used. Either 'human' (hg38) or 'mouse' (mm10)."}
         genome_fasta: {help: "Path to the reference genome FASTA file."}
         genes_gtf: {help: "Path to the reference gene annotation GTF file."}
-        mode: {help: "Mode to run split-pipe in."}
         chemistry: {help: "Chemistry used in the experiment."}
         kit: {help: "Kit used in the experiment."}
-        sample_table: {help: "Path to the sample table file."}
+        sample_list_tsv: {help: "Path to the sample loading table file."}
         parameter_file: {help: "Optional path to the parameter file."}
         container_registry: {help: "Container registry where workflow Docker images are hosted."}
         zones: {help: "Compute zones to run the workflow in."}
@@ -149,13 +146,12 @@ task make_reference {
 task split_pipe {
     input {
         File genome_ref_tar_gz
-        String mode = "all"
         String sublibrary_id
         String chemistry
         String kit
         Array[File] fastq_R1s
         Array[File] fastq_R2s
-        File sample_table
+        File sample_list_tsv
         File? parameter_file
         String container_registry
         String zones
@@ -173,15 +169,16 @@ task split_pipe {
         mkdir ~{sublibrary_id}
 
         split-pipe \
-            --mode ~{mode} \
+            --mode all \
             --chemistry ~{chemistry} \
             --kit ~{kit} \
             --fq1 ~{sep=" " fastq_R1s} \
             --fq2 ~{sep=" " fastq_R2s} \
             --genome_dir genome_ref \
             --output_dir ~{sublibrary_id} \
-            --samp_list ~{sample_table} \
+            --samp_list ~{sample_list_tsv} \
             --nthreads ~{threads} \
+            --no_keep_going \
             ~{if defined(parameter_file) then "--parfile " + select_first([parameter_file]) else ""} \
             --dryrun      # TODO: remove after testing
 
@@ -213,7 +210,7 @@ task split_pipe {
         kit: {help: "Kit used for the sublibrary."}
         fastq_R1s: {help: "Array of FASTQ files for read 1."}
         fastq_R2s: {help: "Array of FASTQ files for read 2."}
-        sample_table: {help: "Path to the sample table file."}
+        sample_list_tsv: {help: "Path to the sample table file."}
         parameter_file: {help: "Optional path to the parameter file."}
     }
 }
