@@ -1,0 +1,13 @@
+{
+    "split_pipe_entrypoint.sublibraries": "Array[Sublibrary]",
+    "split_pipe_entrypoint.organism": "String",
+    "split_pipe_entrypoint.genome_fasta": "File",
+    "split_pipe_entrypoint.genes_gtf": "File",
+    "split_pipe_entrypoint.mode": "String",
+    "split_pipe_entrypoint.chemistry": "String",
+    "split_pipe_entrypoint.kit": "String",
+    "split_pipe_entrypoint.sample_loading_table": "File",
+    "split_pipe_entrypoint.parameter_table": "File",
+    "split_pipe_entrypoint.container_registry": "String",
+    "split_pipe_entrypoint.zones": "String (optional, default = \"us-central1-c us-central1-f\")"
+}
