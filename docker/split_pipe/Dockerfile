@@ -40,7 +40,7 @@ COPY --from=tools /opt/split-pipe /opt/split-pipe
 
 RUN conda run -n split-pipe bash /opt/split-pipe/install_dependencies.sh -i -y \
     && conda run -n split-pipe pip install --no-cache-dir /opt/split-pipe/ \
-    && ln -s /opt/split-pipe/split-pipe /usr/local/bin/split-pipe
+    && ln -s /opt/miniconda3/envs/split-pipe/bin/split-pipe /usr/local/bin/split-pipe
 
 # Gcloud for uploading output
 ARG GCLOUD_CLI_VERSION
