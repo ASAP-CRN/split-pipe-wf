@@ -97,7 +97,7 @@ task make_reference {
     String genome_name = if organism == "human" then "hg38" else "mm10"
     Int threads = 16
     Int mem_gb = 48
-    Int disk_size = 50
+    Int disk_size = 400  # 50->400 to test if increased throughput reduces time
 
     command <<<
         set -euo pipefail
@@ -127,6 +127,7 @@ task make_reference {
         memory: "~{mem_gb} GB"
         disks: "local-disk ~{disk_size} HDD"
         bootDiskSizeGb: 40
+        preemptible: 3
         zones: zones
     }
 
@@ -159,7 +160,7 @@ task split_pipe {
 
     Int threads = 16
     Int mem_gb = 48
-    Int disk_size = ceil((size(genome_ref_tar_gz, "GB") + size(flatten([fastq_R1s, fastq_R2s]), "GB")) * 4 + 50)
+    Int disk_size = ceil((size(genome_ref_tar_gz, "GB") + (size(flatten([fastq_R1s, fastq_R2s]), "GB")) * 8) + 50 )
 
     command <<<
         set -euo pipefail
@@ -179,9 +180,14 @@ task split_pipe {
             --samp_list ~{sample_list_tsv} \
             --nthreads ~{threads} \
             --no_keep_going \
-            ~{if defined(parameter_file) then "--parfile " + select_first([parameter_file]) else ""} \
-            --dryrun      # TODO: remove after testing
+            --save_anndata \
+            ~{if defined(parameter_file) then "--parfile " + select_first([parameter_file]) else ""}
 
+        if ! ls ~{sublibrary_id}/*/DGE_filtered/count_matrix.mtx >/dev/null 2>&1; then
+            echo "ERROR: split-pipe exited 0 but produced no DGE output" >&2
+            exit 1
+        fi
+        
         tar -czf ~{sublibrary_id}.tar.gz ~{sublibrary_id}        
     >>>
 
@@ -226,7 +232,7 @@ task combine_sublibraries {
     
     File sublib_list = write_lines(sublibrary_ids)
     Int threads = 16
-    Int mem_gb = 48  # TODO: Revisit, PB docs bin at 64/128/256 GB
+    Int mem_gb = 64  # TODO: Revisit, PB docs bin at 64/128/256 GB
     Int disk_size = ceil(size(sublibrary_tars, "GB") * 8 + 50)  # TODO: 8x for unpacking each tar + the final combined object - revisit 
 
     command <<<
@@ -237,8 +243,7 @@ task combine_sublibraries {
         ids_array=(~{sep=" " sublibrary_ids})
         tars_array=(~{sep=" " sublibrary_tars})
         for i in "${!tars_array[@]}"; do
-            mkdir -p "sublibs/${ids_array[$i]}"
-            tar -xzf "${tars_array[$i]}" -C "sublibs/${ids_array[$i]}"
+            tar -xzf "${tars_array[$i]}" -C sublibs
         done
 
         split-pipe \
@@ -263,6 +268,7 @@ task combine_sublibraries {
         memory: "~{mem_gb} GB"
         disks: "local-disk ~{disk_size} HDD"
         bootDiskSizeGb: 40
+        preemptible: 3
         zones: zones
     }
 
