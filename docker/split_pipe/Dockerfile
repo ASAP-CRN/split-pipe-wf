@@ -29,6 +29,7 @@ ENV CONDA_PLUGINS_AUTO_ACCEPT_TOS=true
 
 RUN apt-get -yq update \
     && apt-get -yq install \
+        sudo \
         gcc \
         wget \
     && rm -rf /var/lib/apt/lists/*
