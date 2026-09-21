@@ -41,7 +41,7 @@ workflow split_pipe_entrypoint {
     }
     
     output {
-        File output_matrix = split_pipe_wf.combined_sublibs_tar_gz
+        File combined_sublibs_tar_gz = split_pipe_wf.combined_sublibs_tar_gz
     }
     
     meta {
