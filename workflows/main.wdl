@@ -10,7 +10,8 @@ workflow split_pipe_entrypoint {
 		Array[Sublibrary] sublibraries
         String organism
         
-        # Make reference genome
+        # Make reference genome if not provided
+        File? genome_ref_tar_gz
         File genome_fasta
         File genes_gtf
 
@@ -28,6 +29,7 @@ workflow split_pipe_entrypoint {
         input:
             sublibraries = sublibraries,
             organism = organism,
+            genome_ref_tar_gz = genome_ref_tar_gz,
             genome_fasta = genome_fasta,
             genes_gtf = genes_gtf,
             chemistry = chemistry,
