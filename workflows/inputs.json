@@ -1,13 +1,41 @@
 {
-    "split_pipe_wf.mode": "String",
-    "split_pipe_wf.dryrun": "Boolean",
-    "split_pipe_wf.chemistry": "String",
-    "split_pipe_wf.kit": "String",
-    "split_pipe_wf.fq1": "Array[File]",
-    "split_pipe_wf.fq2": "Array[File]",
-    "split_pipe_wf.sample_loading_table": "File",
-    "split_pipe_wf.organism": "String",
-    "split_pipe_wf.genome_name": "String",
-    "split_pipe_wf.reference_genome": "File",
-    "split_pipe_wf.container_registry": "String"
+    "split_pipe_entrypoint.sublibraries": [
+        {
+            "sublibrary_id": "PB-001-a",
+            "fastq_R1s": [
+                "gs://asap-raw-team-voet-pmdbs-sn-rnaseq-parsebio/fastqs/NextSeq2000_20220426_ASA__7e6e87__20220420_PB-001-a-RNA_S1_R1_001.fastq.gz",
+                "gs://asap-raw-team-voet-pmdbs-sn-rnaseq-parsebio/fastqs/NovaSeq6000_20231206_20220420_PB-001-a-RNA_S10_L003_R1_001.fastq.gz",
+                "gs://asap-raw-team-voet-pmdbs-sn-rnaseq-parsebio/fastqs/NovaSeq6000_20231206_20220420_PB-001-a-RNA_S10_L004_R1_001.fastq.gz"
+            ],
+            "fastq_R2s": [
+                "gs://asap-raw-team-voet-pmdbs-sn-rnaseq-parsebio/fastqs/NextSeq2000_20220426_ASA__7e6e87__20220420_PB-001-a-RNA_S1_R2_001.fastq.gz",
+                "gs://asap-raw-team-voet-pmdbs-sn-rnaseq-parsebio/fastqs/NovaSeq6000_20231206_20220420_PB-001-a-RNA_S10_L003_R2_001.fastq.gz",
+                "gs://asap-raw-team-voet-pmdbs-sn-rnaseq-parsebio/fastqs/NovaSeq6000_20231206_20220420_PB-001-a-RNA_S10_L004_R2_001.fastq.gz"
+            ]
+        },
+        {
+            "sublibrary_id": "PB-001-b",
+            "fastq_R1s": [
+                "gs://asap-raw-team-voet-pmdbs-sn-rnaseq-parsebio/fastqs/NextSeq2000_20220426_ASA__8f95c1__20220420_PB-001-b-RNA_S2_R1_001.fastq.gz",
+                "gs://asap-raw-team-voet-pmdbs-sn-rnaseq-parsebio/fastqs/NovaSeq6000_20221014_ASA__8f95c1__20220420_PB-001-b-RNA_S1_R1_001.fastq.gz",
+                "gs://asap-raw-team-voet-pmdbs-sn-rnaseq-parsebio/fastqs/NovaSeq6000_20231206_20220420_PB-001-b-RNA_S11_L003_R1_001.fastq.gz",
+                "gs://asap-raw-team-voet-pmdbs-sn-rnaseq-parsebio/fastqs/NovaSeq6000_20231206_20220420_PB-001-b-RNA_S11_L004_R1_001.fastq.gz"
+            ],
+            "fastq_R2s": [
+                "gs://asap-raw-team-voet-pmdbs-sn-rnaseq-parsebio/fastqs/NextSeq2000_20220426_ASA__8f95c1__20220420_PB-001-b-RNA_S2_R2_001.fastq.gz",
+                "gs://asap-raw-team-voet-pmdbs-sn-rnaseq-parsebio/fastqs/NovaSeq6000_20221014_ASA__8f95c1__20220420_PB-001-b-RNA_S1_R2_001.fastq.gz",
+                "gs://asap-raw-team-voet-pmdbs-sn-rnaseq-parsebio/fastqs/NovaSeq6000_20231206_20220420_PB-001-b-RNA_S11_L003_R2_001.fastq.gz",
+                "gs://asap-raw-team-voet-pmdbs-sn-rnaseq-parsebio/fastqs/NovaSeq6000_20231206_20220420_PB-001-b-RNA_S11_L004_R2_001.fastq.gz"
+            ]
+        }
+    ],
+    "split_pipe_entrypoint.organism": "human",
+    "split_pipe_entrypoint.genome_ref_tar_gz": "gs://asap-workflow-dev/workflow-resources/hg38_reference_index.tar.gz",
+    "split_pipe_entrypoint.genome_fasta": "gs://asap-workflow-dev/workflow-resources/GRCh38.primary_assembly.genome.fa.gz",
+    "split_pipe_entrypoint.genes_gtf": "gs://asap-workflow-dev/workflow-resources/gencode.v46.annotation.gtf.gz",
+    "split_pipe_entrypoint.chemistry": "v1",
+    "split_pipe_entrypoint.kit": "WT",
+    "split_pipe_entrypoint.sample_list_tsv": "gs://asap-workflow-dev/split_pipe_dev/test_sample_list.tsv",
+    "split_pipe_entrypoint.container_registry": "us-central1-docker.pkg.dev/dnastack-asap-parkinsons/workflow-images",
+    "split_pipe_entrypoint.zones": "us-central1-c us-central1-f"
 }
