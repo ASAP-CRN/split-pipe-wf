@@ -9,6 +9,7 @@ workflow split_pipe_wf {
     input {
         Array[Sublibrary] sublibraries
         String organism
+        File? genome_ref_tar_gz
         File genome_fasta
         File genes_gtf
 
@@ -21,15 +22,22 @@ workflow split_pipe_wf {
 		String zones
     }
 
-    # Build reference genome index
-    call make_reference {
+    # Build reference genome index if it was not provided
+    if (!defined(genome_ref_tar_gz)) {
+        call make_reference {
         input:
             organism = organism,
             genome_fasta = genome_fasta,
             genes_gtf = genes_gtf,
             container_registry = container_registry,
             zones = zones
+        }
     }
+
+    File genome_ref_final = select_first([
+        genome_ref_tar_gz, 
+        make_reference.genome_ref_tar_gz
+    ])
 
     # Run split-pipe on each sublibrary
     scatter (sublibrary in sublibraries) {
@@ -37,7 +45,7 @@ workflow split_pipe_wf {
         
         call split_pipe {
             input:
-                genome_ref_tar_gz = make_reference.genome_ref_tar_gz,
+                genome_ref_tar_gz = genome_ref_final,
                 sublibrary_id = sublibrary_id,
                 chemistry = chemistry,
                 kit = kit,
@@ -55,6 +63,7 @@ workflow split_pipe_wf {
     # Combine the output sublibaries into one object
     call combine_sublibraries {
         input:
+            genome_ref_tar_gz = genome_ref_final,
             sublibrary_tars = split_pipe.sublibrary_tar_gz,  # Gathered Array[File] from the split-pipe scatter
             sublibrary_ids = sublibrary_ids,
             container_registry = container_registry,
@@ -159,14 +168,15 @@ task split_pipe {
     }
 
     Int threads = 16
-    Int mem_gb = 48
+    Int mem_gb = 48  # TODO: Revisit, PB docs bin at 64/128/256 GB
     Int disk_size = ceil((size(genome_ref_tar_gz, "GB") + (size(flatten([fastq_R1s, fastq_R2s]), "GB")) * 8) + 50 )
 
     command <<<
         set -euo pipefail
 
         # Extract the genome reference dir and make the output sublibrary dir
-        tar -xzf ~{genome_ref_tar_gz}
+        mkdir genome_ref
+        tar -xzf ~{genome_ref_tar_gz} -C genome_ref --strip-components=1
         mkdir ~{sublibrary_id}
 
         split-pipe \
@@ -224,6 +234,7 @@ task split_pipe {
 
 task combine_sublibraries {
     input {
+        File genome_ref_tar_gz
         Array[File] sublibrary_tars
         Array[String] sublibrary_ids
         String container_registry
@@ -232,11 +243,15 @@ task combine_sublibraries {
     
     File sublib_list = write_lines(sublibrary_ids)
     Int threads = 16
-    Int mem_gb = 64  # TODO: Revisit, PB docs bin at 64/128/256 GB
-    Int disk_size = ceil(size(sublibrary_tars, "GB") * 8 + 50)  # TODO: 8x for unpacking each tar + the final combined object - revisit 
+    Int mem_gb = 48  # TODO: revisit if too generous
+    Int disk_size = ceil((size(sublibrary_tars, "GB") * 8) + (size(genome_ref_tar_gz, "GB") * 3) + 50)
 
     command <<<
         set -euo pipefail
+
+        # split-pipe detects genome_dir in CWD -- declaring as argument in split-pipe call leads to tricky cromwell pathing interaction 
+        mkdir genome_ref
+        tar -xzf ~{genome_ref_tar_gz} -C genome_ref --strip-components=1
 
         # Extract each sublibrary .tar.gz into sublibs/
         mkdir -p sublibs
@@ -253,7 +268,7 @@ task combine_sublibraries {
             --output_dir combined_sublibs \
             --nthreads ~{threads}
 
-        # TODO: Full directory with all outputs declared?
+        # TODO: Full directory with all outputs declared
         tar -czf combined_sublibs.tar.gz combined_sublibs
     >>>
 
