@@ -1,13 +1,13 @@
 {
-    "split_pipe_entrypoint.sublibraries": "Array[Sublibrary]",
-    "split_pipe_entrypoint.organism": "String",
-    "split_pipe_entrypoint.genome_fasta": "File",
-    "split_pipe_entrypoint.genes_gtf": "File",
-    "split_pipe_entrypoint.mode": "String",
-    "split_pipe_entrypoint.chemistry": "String",
-    "split_pipe_entrypoint.kit": "String",
-    "split_pipe_entrypoint.sample_loading_table": "File",
-    "split_pipe_entrypoint.parameter_table": "File",
+    "split_pipe_entrypoint.sublibraries": "Array[Sublibrary] (sublibrary_id + fastq_R1s + fastq_R2s; one entry per sublibrary)",
+    "split_pipe_entrypoint.organism": "String ('human' -> hg38, anything else -> mm10)",
+    "split_pipe_entrypoint.genome_ref_tar_gz": "File? (optional; prebuilt split-pipe mkref index. Supply to skip make_reference, omit to build one)",
+    "split_pipe_entrypoint.genome_fasta": "File (only used when genome_ref_tar_gz is omitted)",
+    "split_pipe_entrypoint.genes_gtf": "File (only used when genome_ref_tar_gz is omitted)",
+    "split_pipe_entrypoint.chemistry": "String (Parse Bio chemistry versions: v1-v4)",
+    "split_pipe_entrypoint.kit": "String (Parse Bio kit versions: WT_mini, WT, WT_mega, WT_mega_384, WT_penta, WT_penta_384)",
+    "split_pipe_entrypoint.sample_list_tsv": "File (sample name + round-1 wells, one per line)",
+    "split_pipe_entrypoint.parameter_file": "File? (optional; split-pipe --parfile, 'key value' per line)",
     "split_pipe_entrypoint.container_registry": "String",
     "split_pipe_entrypoint.zones": "String (optional, default = \"us-central1-c us-central1-f\")"
 }
