@@ -29,8 +29,10 @@ ENV CONDA_PLUGINS_AUTO_ACCEPT_TOS=true
 
 RUN apt-get -yq update \
     && apt-get -yq install \
+        sudo \
         gcc \
         wget \
+        unzip \
     && rm -rf /var/lib/apt/lists/*
 
 RUN conda create -n split-pipe python=${PYTHON_VERSION} -y
@@ -40,7 +42,10 @@ COPY --from=tools /opt/split-pipe /opt/split-pipe
 
 RUN conda run -n split-pipe bash /opt/split-pipe/install_dependencies.sh -i -y \
     && conda run -n split-pipe pip install --no-cache-dir /opt/split-pipe/ \
-    && ln -s /opt/split-pipe/split-pipe /usr/local/bin/split-pipe
+    && conda install -n split-pipe -y bioconda::fastqc \
+    && ln -s /opt/miniconda3/envs/split-pipe/bin/split-pipe /usr/local/bin/split-pipe
+
+ENV PATH="/opt/miniconda3/envs/split-pipe/bin:${PATH}"
 
 # Gcloud for uploading output
 ARG GCLOUD_CLI_VERSION
