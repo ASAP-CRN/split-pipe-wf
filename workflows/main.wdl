@@ -7,8 +7,9 @@ import "split_pipe/split_pipe.wdl" as SplitPipe
 
 workflow split_pipe_entrypoint {
 	input {
-		Array[Sublibrary] sublibraries
-        String organism
+		String dataset_id
+        Array[Sublibrary] sublibraries
+        String genome_name
         
         # Make reference genome if not provided
         File? genome_ref_tar_gz
@@ -27,8 +28,9 @@ workflow split_pipe_entrypoint {
     
     call SplitPipe.split_pipe_wf {
         input:
+            dataset_id = dataset_id,
             sublibraries = sublibraries,
-            organism = organism,
+            genome_name = genome_name,
             genome_ref_tar_gz = genome_ref_tar_gz,
             genome_fasta = genome_fasta,
             genes_gtf = genes_gtf,
@@ -49,8 +51,9 @@ workflow split_pipe_entrypoint {
     }
 
     parameter_meta {
+        dataset_id: {help: "The unique identifier for the dataset."}
         sublibraries: {help: "Array of sublibrary structs containing sublibrary IDs and FASTQ file paths."}
-        organism: {help: "Organism; used to select which reference genome is used. Either 'human' (hg38) or 'mouse' (mm10)."}
+        genome_name: {help: "The name of which reference genome is used. Either 'hg38' (human) or 'mm10' (mouse)."}
         genome_fasta: {help: "Path to the reference genome FASTA file."}
         genes_gtf: {help: "Path to the reference gene annotation GTF file."}
         chemistry: {help: "Chemistry used in the experiment."}

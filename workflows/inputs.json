@@ -1,4 +1,5 @@
 {
+    "split_pipe_entrypoint.dataset_id": "team-voet-pmdbs-sn-rnaseq-parsebio",
     "split_pipe_entrypoint.sublibraries": [
         {
             "sublibrary_id": "PB-001-a",
@@ -29,7 +30,7 @@
             ]
         }
     ],
-    "split_pipe_entrypoint.organism": "human",
+    "split_pipe_entrypoint.genome_name": "hg38",
     "split_pipe_entrypoint.genome_ref_tar_gz": "gs://asap-workflow-dev/workflow-resources/hg38_reference_index.tar.gz",
     "split_pipe_entrypoint.genome_fasta": "gs://asap-workflow-dev/workflow-resources/GRCh38.primary_assembly.genome.fa.gz",
     "split_pipe_entrypoint.genes_gtf": "gs://asap-workflow-dev/workflow-resources/gencode.v46.annotation.gtf.gz",

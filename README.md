@@ -56,8 +56,9 @@ An input template file can be found at
 
 | Type | Name | Description |
 | :- | :- | :- |
+| String | dataset_id | The unique name used to identify the dataset across the CRN Cloud.  |
 | Array[[Sublibrary](#sublibrary)] | sublibraries | The set of sublibraries to process, and their associated reads. |
-| String | organism | Organism; used to name the reference. Options: 'human' (hg38) or 'mouse' (mm10). |
+| String | genome_name | Genome name; used to name the reference. Options: 'hg38' (human) or 'mm10' (mouse). |
 | File? | genome_ref_tar_gz | Prebuilt `split-pipe` mkref index, as a gzipped tarball. If supplied, `make_reference` is skipped; if omitted, an index is built from `genome_fasta` and `genes_gtf`. |
 | File | genome_fasta | Reference genome FASTA. Only used when `genome_ref_tar_gz` is omitted. |
 | File | genes_gtf | Reference gene annotation GTF. Only used when `genome_ref_tar_gz` is omitted. |

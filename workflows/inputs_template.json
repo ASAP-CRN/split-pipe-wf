@@ -1,6 +1,7 @@
 {
+    "split_pipe_entrypoint.dataset_id": "String (The unique identifier for the dataset.)",
     "split_pipe_entrypoint.sublibraries": "Array[Sublibrary] (sublibrary_id + fastq_R1s + fastq_R2s; one entry per sublibrary)",
-    "split_pipe_entrypoint.organism": "String ('human' -> hg38, anything else -> mm10)",
+    "split_pipe_entrypoint.genome_name": "String (The name of the reference genome: 'hg38' or 'mm10'",
     "split_pipe_entrypoint.genome_ref_tar_gz": "File? (optional; prebuilt split-pipe mkref index. Supply to skip make_reference, omit to build one)",
     "split_pipe_entrypoint.genome_fasta": "File (only used when genome_ref_tar_gz is omitted)",
     "split_pipe_entrypoint.genes_gtf": "File (only used when genome_ref_tar_gz is omitted)",

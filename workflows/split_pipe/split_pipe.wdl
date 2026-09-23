@@ -7,8 +7,9 @@ import "../structs.wdl"
 
 workflow split_pipe_wf {
     input {
+        String dataset_id
         Array[Sublibrary] sublibraries
-        String organism
+        String genome_name
         File? genome_ref_tar_gz
         File genome_fasta
         File genes_gtf
@@ -26,7 +27,7 @@ workflow split_pipe_wf {
     if (!defined(genome_ref_tar_gz)) {
         call make_reference {
         input:
-            organism = organism,
+            genome_name = genome_name,
             genome_fasta = genome_fasta,
             genes_gtf = genes_gtf,
             container_registry = container_registry,
@@ -46,6 +47,7 @@ workflow split_pipe_wf {
         call split_pipe {
             input:
                 genome_ref_tar_gz = genome_ref_final,
+                dataset_id = dataset_id,
                 sublibrary_id = sublibrary_id,
                 chemistry = chemistry,
                 kit = kit,
@@ -65,6 +67,7 @@ workflow split_pipe_wf {
         input:
             genome_ref_tar_gz = genome_ref_final,
             sublibrary_tars = split_pipe.sublibrary_tar_gz,  # Gathered Array[File] from the split-pipe scatter
+            dataset_id = dataset_id,
             sublibrary_ids = sublibrary_ids,
             container_registry = container_registry,
             zones = zones
@@ -80,8 +83,9 @@ workflow split_pipe_wf {
     }
 
     parameter_meta {
+        dataset_id: {help: "The unique identifier for the dataset."}
         sublibraries: {help: "Array of sublibrary structs containing sublibrary IDs and FASTQ file paths."}
-        organism: {help: "Organism; used to select which reference genome is used. Either 'human' (hg38) or 'mouse' (mm10)."}
+        genome_name: {help: "The name of which reference genome is used. Either 'hg38' (human) or 'mm10' (mouse)."}
         genome_fasta: {help: "Path to the reference genome FASTA file."}
         genes_gtf: {help: "Path to the reference gene annotation GTF file."}
         chemistry: {help: "Chemistry used in the experiment."}
@@ -96,14 +100,13 @@ workflow split_pipe_wf {
 
 task make_reference {
     input {
-        String organism
+        String genome_name
         File genome_fasta
         File genes_gtf
 		String container_registry
 		String zones
     }
 
-    String genome_name = if organism == "human" then "hg38" else "mm10"
     Int threads = 16
     Int mem_gb = 48
     Int disk_size = 400  # 50->400 to test if increased throughput reduces time
@@ -135,7 +138,6 @@ task make_reference {
         cpuPlatform: "Intel Cascade Lake"
         memory: "~{mem_gb} GB"
         disks: "local-disk ~{disk_size} HDD"
-        bootDiskSizeGb: 40
         preemptible: 3
         zones: zones
     }
@@ -145,7 +147,7 @@ task make_reference {
     }
 
     parameter_meta {
-        organism: {help: "Organism; used to select which reference genome is used. Either 'human' (hg38) or 'mouse' (mm10)."}
+        genome_name: {help: "The name of which reference genome is used. Either 'hg38' (human) or 'mm10' (mouse)."}
         genome_fasta: {help: "Path to the reference genome FASTA file."}
         genes_gtf: {help: "Path to the reference gene annotation GTF file."}
     }
@@ -156,6 +158,7 @@ task make_reference {
 task split_pipe {
     input {
         File genome_ref_tar_gz
+        String dataset_id
         String sublibrary_id
         String chemistry
         String kit
@@ -193,16 +196,17 @@ task split_pipe {
             --save_anndata \
             ~{if defined(parameter_file) then "--parfile " + select_first([parameter_file]) else ""}
 
+        # TODO: update check when output fully declared
         if ! ls ~{sublibrary_id}/*/DGE_filtered/count_matrix.mtx >/dev/null 2>&1; then
             echo "ERROR: split-pipe exited 0 but produced no DGE output" >&2
             exit 1
         fi
         
-        tar -czf ~{sublibrary_id}.tar.gz ~{sublibrary_id}        
+        tar -czf ~{dataset_id}_~{sublibrary_id}.tar.gz ~{sublibrary_id}        
     >>>
 
     output {
-        File sublibrary_tar_gz = "~{sublibrary_id}.tar.gz"
+        File sublibrary_tar_gz = "~{dataset_id}_~{sublibrary_id}.tar.gz"
     }
 
     runtime {
@@ -211,16 +215,16 @@ task split_pipe {
         cpuPlatform: "Intel Cascade Lake"
         memory: "~{mem_gb} GB"
         disks: "local-disk ~{disk_size} HDD"
-        bootDiskSizeGb: 40
         zones: zones
     }
 
     meta {
-        description: "Run split-pipe on the given sublibrary."  # TODO: more detail
+        description: "Run split-pipe on mode: 'all' for the given sublibrary."
     }
 
     # TODO: add options
     parameter_meta {
+        dataset_id: {help: "The unique identifier for the dataset."}
         sublibrary_id: {help: "Identifier for the sublibrary being processed."}
         chemistry: {help: "Chemistry used for the sublibrary."}
         kit: {help: "Kit used for the sublibrary."}
@@ -235,6 +239,7 @@ task split_pipe {
 task combine_sublibraries {
     input {
         File genome_ref_tar_gz
+        String dataset_id
         Array[File] sublibrary_tars
         Array[String] sublibrary_ids
         String container_registry
@@ -269,11 +274,11 @@ task combine_sublibraries {
             --nthreads ~{threads}
 
         # TODO: Full directory with all outputs declared
-        tar -czf combined_sublibs.tar.gz combined_sublibs
+        tar -czf "~{dataset_id}_combined_sublibs.tar.gz" combined_sublibs
     >>>
 
     output {
-        File combined_sublibs_tar_gz = "combined_sublibs.tar.gz"
+        File combined_sublibs_tar_gz = "~{dataset_id}_combined_sublibs.tar.gz"
     }
 
     runtime {
@@ -282,7 +287,6 @@ task combine_sublibraries {
         cpuPlatform: "Intel Cascade Lake"
         memory: "~{mem_gb} GB"
         disks: "local-disk ~{disk_size} HDD"
-        bootDiskSizeGb: 40
         preemptible: 3
         zones: zones
     }
@@ -292,6 +296,7 @@ task combine_sublibraries {
     }
 
     parameter_meta {
+        dataset_id: {help: "The unique identifier for the dataset."}
         sublibrary_tars: {help: "Array of sublibrary tar.gz files to be combined."}
         sublibrary_ids: {help: "Array of sublibrary identifiers corresponding to the tar.gz files."}
     }
