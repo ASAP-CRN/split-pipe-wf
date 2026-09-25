@@ -206,7 +206,7 @@ task split_pipe {
     >>>
 
     output {
-        File sublibrary_tar_gz = "~{dataset_id}_~{sublibrary_id}.tar.gz"
+        File sublibrary_tar_gz = "~{dataset_id}.~{sublibrary_id}.tar.gz"
     }
 
     runtime {
@@ -274,7 +274,7 @@ task combine_sublibraries {
             --nthreads ~{threads}
 
         # TODO: Full directory with all outputs declared
-        tar -czf "~{dataset_id}_combined_sublibs.tar.gz" combined_sublibs
+        tar -czf "~{dataset_id}.combined_sublibs.tar.gz" combined_sublibs
     >>>
 
     output {
