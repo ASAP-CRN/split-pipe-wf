@@ -17,7 +17,7 @@ import logging
 logging.basicConfig(level=logging.INFO)
 
 
-def load_table(file_path: Path, sep: str = ",", check_join_key=str):
+def load_table(file_path: Path, check_join_key: str, sep: str = ","):
     """
     Loader for both cell metadata and vireo donoor mapping tables that checks that
     the expected join key is present in the table.
@@ -51,6 +51,7 @@ def join_cell_meta_and_vireo(
         right_on=right_on,
         how="left"
     )
+    join_df.drop(columns=["cell"], inplace=True)
     
     return join_df
 
@@ -68,9 +69,9 @@ def check_missing_donor_ids(join_df: pd.DataFrame, min_prop: float = 0.5) -> Non
 
 def main():
     parser = argparse.ArgumentParser(description="Join donor IDs from Vireo to cell metadata.")
-    parser.add_argument("cell_meta", type=Path, help="Path to the cell metadata CSV file.")
-    parser.add_argument("vireo", type=Path, help="Path to the Vireo TSV file.")
-    parser.add_argument("output", type=Path, help="Path to the output CSV file.")
+    parser.add_argument("--cell_meta", type=Path, help="Path to the cell metadata CSV file.")
+    parser.add_argument("--vireo", type=Path, help="Path to the Vireo TSV file.")
+    parser.add_argument("--output", type=Path, help="Path to the output CSV file.")
     args = parser.parse_args()
 
     # split-pipe meta output as .csv, provided vireo tables are .tsv
