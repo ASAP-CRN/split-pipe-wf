@@ -22,6 +22,7 @@ workflow postprocess_entrypoint {
                 kit = kit,
                 sample_name = parse_sample.parse_sample_name,
                 donor_id_vireo_mapping = parse_sample.vireo_donor_ids,
+                subject_id = parse_sample.subject_id,
                 vireo_join_script = vireo_join_script,
                 container_registry = container_registry,
                 zones = zones
@@ -41,6 +42,7 @@ task vireo_and_qc_metrics {
         String kit
         String sample_name
         File? donor_id_vireo_mapping
+        String? subject_id
         File vireo_join_script  # This will be baked into the image once verified
         String container_registry
         String zones
@@ -56,7 +58,7 @@ task vireo_and_qc_metrics {
         set -euo pipefail
 
         tar -xzf ~{combined_sublibs_tar_gz}
-        cell_meta="combined_sublibs/~{sample_name}/DGE_unfiltered/cell_metadata.csv"
+        cell_meta="combined_sublibs/~{sample_name}/DGE_filtered/cell_metadata.csv"
 
         if [ ! -f "$cell_meta" ]; then
             echo "Cell metadata file for sample ~{sample_name} not found: $cell_meta"
@@ -65,7 +67,8 @@ task vireo_and_qc_metrics {
 
         python3 ~{vireo_join_script} \
             --cell_meta "$cell_meta" \
-            --vireo ~{donor_id_vireo_mapping} \
+            ~{"--vireo " + donor_id_vireo_mapping} \
+            ~{"--subject_id " + subject_id} \
             --output ~{output_name}
     >>>
 
