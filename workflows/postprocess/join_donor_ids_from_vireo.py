@@ -6,7 +6,11 @@ Warn if a significant proportion of donor IDs are missing, which may indicate a
 mismatch between the provided tables.
 
 Usage
-    python join_donor_ids_from_vireo.py <cell_meta.csv> <vireo.tsv> <output.csv>
+    python join_donor_ids_from_vireo.py 
+        --cell_meta <cell_meta.csv> \
+        --vireo <vireo.tsv> \
+        --subject_id <subject_id> \
+        --output <output.csv>
 """
 
 import argparse
@@ -35,34 +39,51 @@ def load_table(file_path: Path, check_join_key: str, sep: str = ","):
 
 
 def join_cell_meta_and_vireo(
-    sample_meta: pd.DataFrame, 
-    vireo_df: pd.DataFrame, 
+    cell_meta: pd.DataFrame, 
+    vireo_df: pd.DataFrame | None, 
+    subject_id: str | None,
     left_on: str = "bc_wells", 
-    right_on: str = "cell"
+    right_on: str = "cell",
     ) -> pd.DataFrame:
     """
-    Join adds the donor information and additional statistics from the vireo mapping
-    to the cell metadata.
-    """
-    join_df = pd.merge(
-        sample_meta,
-        vireo_df,
-        left_on=left_on,
-        right_on=right_on,
-        how="left"
-    )
-    join_df.drop(columns=["cell"], inplace=True)
+    If vireo_df is provided, join to the cell metadata table to add donor IDs and 
+    additional vireo statistics. If subject_id is provided, add this information
+    directly as donor_id, and fill out the remaining vireo columns as NA.
     
+    This branching is because for the Team Voet Parse Bio dataset, every sample
+    but one (ASA_063) was genetically pooled and required vireo-based donor assignment.
+    """
+    if vireo_df is not None:
+        join_df = pd.merge(
+            cell_meta,
+            vireo_df,
+            left_on=left_on,
+            right_on=right_on,
+            how="left"
+        )
+        join_df.drop(columns=["cell"], inplace=True)
+        
+        # Check the proportion of missing donor IDs, then assign NA to "unassigned"
+        check_missing_donor_ids(join_df)
+        join_df["donor_id"] = join_df["donor_id"].fillna("unassigned")
+        
+    else:
+        join_df = cell_meta.copy()
+        join_df["donor_id"] = subject_id
+        vireo_cols = ["prob_max", "prob_doublet", "n_vars", "best_singlet", "best_doublet", "doublet_logLikRatio"]
+        for col in vireo_cols:
+            join_df[col] = pd.NA
+            
     return join_df
 
 
-def check_missing_donor_ids(join_df: pd.DataFrame, min_prop: float = 0.5) -> None:
+def check_missing_donor_ids(join_df: pd.DataFrame, min_prop: float = 0.8) -> None:
     """
     Check the proportion of missing donor IDs and log a warning if it exceeds the threshold.
     """
     non_na_proportion = join_df['donor_id'].notna().mean()
     if non_na_proportion < min_prop:
-        logging.warning(f"Proportion of non-NA donor_id is low: {non_na_proportion}")
+        logging.error(f"Proportion of non-NA donor_id is low: {non_na_proportion}")
     else:
         logging.info(f"Proportion of non-NA donor_id: {non_na_proportion}")
 
@@ -70,16 +91,24 @@ def check_missing_donor_ids(join_df: pd.DataFrame, min_prop: float = 0.5) -> Non
 def main():
     parser = argparse.ArgumentParser(description="Join donor IDs from Vireo to cell metadata.")
     parser.add_argument("--cell_meta", type=Path, help="Path to the cell metadata CSV file.")
-    parser.add_argument("--vireo", type=Path, help="Path to the Vireo TSV file.")
+    
+    # Either a Vireo file or a subject ID must be provided, but not both or neither
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument("--vireo", type=Path, help="Path to the Vireo TSV file.")
+    group.add_argument("--subject_id", type=str, help="Donor ID (subject_id) for the sample.")
+    
     parser.add_argument("--output", type=Path, help="Path to the output CSV file.")
     args = parser.parse_args()
 
     # split-pipe meta output as .csv, provided vireo tables are .tsv
     cell_meta = load_table(args.cell_meta, sep=",", check_join_key="bc_wells")
-    vireo_df = load_table(args.vireo, sep="\t", check_join_key="cell")
+    
+    if args.vireo is not None:
+        vireo_df = load_table(args.vireo, sep="\t", check_join_key="cell")
+    else:
+        vireo_df = None
 
-    join_data = join_cell_meta_and_vireo(cell_meta, vireo_df)
-    check_missing_donor_ids(join_data)
+    join_data = join_cell_meta_and_vireo(cell_meta, vireo_df, subject_id=args.subject_id)
 
     join_data.to_csv(args.output, index=False)
 
