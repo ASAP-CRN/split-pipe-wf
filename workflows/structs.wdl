@@ -10,4 +10,5 @@ struct Sublibrary {
 struct ParseSample {
     String parse_sample_name
     File? vireo_donor_ids
+    String? subject_id
 }
