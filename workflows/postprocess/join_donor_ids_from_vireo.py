@@ -21,7 +21,7 @@ import logging
 logging.basicConfig(level=logging.INFO)
 
 
-def load_table(file_path: Path, check_join_key: str, sep: str = ","):
+def load_table(file_path: Path, check_join_key: str, sep: str = ",") -> pd.DataFrame:
     """
     Loader for both cell metadata and vireo donoor mapping tables that checks that
     the expected join key is present in the table.
@@ -52,6 +52,8 @@ def join_cell_meta_and_vireo(
     
     This branching is because for the Team Voet Parse Bio dataset, every sample
     but one (ASA_063) was genetically pooled and required vireo-based donor assignment.
+    For the one subject we can just plug it in directly while the remaining vireo 
+    columns will be filled with NA.
     """
     if vireo_df is not None:
         join_df = pd.merge(
@@ -84,6 +86,7 @@ def check_missing_donor_ids(join_df: pd.DataFrame, min_prop: float = 0.8) -> Non
     non_na_proportion = join_df['donor_id'].notna().mean()
     if non_na_proportion < min_prop:
         logging.error(f"Proportion of non-NA donor_id is low: {non_na_proportion}")
+        raise ValueError(f"Proportion of non-NA donor_id is below the minimum threshold of {min_prop}: {non_na_proportion}")
     else:
         logging.info(f"Proportion of non-NA donor_id: {non_na_proportion}")
 
