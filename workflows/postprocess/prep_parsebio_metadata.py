@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-# Direct reference: https://www.sc-best-practices.org/preprocessing-visualization/quality-control/
+# TODO Direct reference: https://www.sc-best-practices.org/preprocessing-visualization/quality-control/
+# TODO: Doc and point to sc-rnaseq-wf
 
 import argparse
 import sys
@@ -41,13 +42,11 @@ def create_adata_object(data_path: Path) -> AnnData:
     gene_data = pd.read_csv(gene_path)
     cell_meta_df = pd.read_csv(cell_meta_path)
     
-    adata.var_names = gene_data["gene_name"]
+    adata.var = gene_data.set_index("gene_name", drop=False)
+    adata.var_names_make_unique(join="__dup")
+    adata.var.index.name = "gene_symbol_unique"
     
-    # TODO: Here or in QC call
-    adata.var_names_make_unique() 
-    
-    adata.obs = cell_meta_df
-    adata.obs_names = adata.obs["bc_wells"]
+    adata.obs = cell_meta_df.set_index("bc_wells", drop=False)
 
     logging.info("Created AnnData object with shape %s", adata.shape)
     return adata
@@ -68,12 +67,9 @@ def add_vireo_joined_metadata(adata: AnnData, vireo_joined_metadata_path: Path) 
     if not vireo_joined_metadata_path.exists():
         raise FileNotFoundError(f"Vireo metadata file not found: {vireo_joined_metadata_path}")
 
-    vireo_meta_df = pd.read_csv(vireo_joined_metadata_path)
-    
-    assert all(adata.obs_names == vireo_meta_df["bc_wells"]), \
-        "Observation names and Vireo metadata are not aligned"
-        
-    adata.obs = vireo_meta_df    
+    vireo_meta_df = pd.read_csv(vireo_joined_metadata_path, index_col="bc_wells")
+    assert adata.obs_names.equals(vireo_meta_df.index)
+    adata.obs = vireo_meta_df
 
     return adata
 
@@ -93,20 +89,28 @@ def add_qc_metrics(adata: AnnData) -> AnnData:
     if not adata.var["mt"].any():
         logging.warning("No mitochondrial genes found using case-insensitive MT- prefix")
 
-    adata.var["rb"] = adata.var_names.str.contains(r"^(RPL|RPS|MRPL|MRPS)", case=False, regex=True)
-    if not adata.var["ribo"].any():
+    adata.var["rb"] = adata.var_names.str.contains(r"^(?:RPL|RPS|MRPL|MRPS)", case=False, regex=True)
+    if not adata.var["rb"].any():
         logging.warning("No ribosomal genes found using case-insensitive RPS/RPL/MRPL/MRPS prefix")
 
     sc.pp.calculate_qc_metrics(
         adata,
         qc_vars=["rb", "mt"],
         percent_top=None,
-        log1p=False,  # TODO: check, doc is true, scrnaseq wf is false
+        log1p=False,
         inplace=True,
     )
     
+    # Remove redundant columns from split-pipe output
+    assert all(adata.obs["gene_count"] == adata.obs["n_genes_by_counts"])
+    assert all(adata.obs["tscp_count"] == adata.obs["total_counts"])
+    adata.obs.drop(columns=["gene_count", "tscp_count"], inplace=True)
+    
+    # Scrublet: drop predicted doublet as will be using doublet scores for thresholding
+    sc.pp.scrublet(adata)
+    adata.obs.drop("predicted_doublet", axis=1, inplace=True)
+    
     return adata
-
 
 
 def main():
@@ -119,6 +123,7 @@ def main():
 
     adata = create_adata_object(data_path=args.data_dir)
     adata = add_vireo_joined_metadata(adata, args.vireo_metadata_path)
+    adata = add_qc_metrics(adata)
     adata.write_h5ad(filename=args.output, compression="gzip")
     logging.info("Saved AnnData object to %s", args.output)
 
