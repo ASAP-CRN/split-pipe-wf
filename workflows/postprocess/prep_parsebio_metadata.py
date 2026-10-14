@@ -193,7 +193,7 @@ def join_asap_metadata(
     obs = obs.merge(lookup, on="subject_id", how="left", validate="many_to_one")
     obs.index = adata.obs.index  # merge drops the index; restore bc_wells
 
-    obs = obs.rename(columns={s
+    obs = obs.rename(columns={
         "ASAP_sample_id": "sample",
         "region_level_1": "brain_region_level_1",
         "region_level_2": "brain_region_level_2",
