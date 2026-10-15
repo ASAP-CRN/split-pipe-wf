@@ -7,9 +7,9 @@ filter's --output-removed-cells-file so the two reports can be stacked.
 
 Usage
     python drop_vireo_doublets.py \
-        --adata_input <merged.h5ad> \
-        --adata_output <vireo_filtered.h5ad> \
-        --output_removed_cells_file <vireo_removed_cells.csv>
+        --adata-input <merged.h5ad> \
+        --adata-output <vireo_filtered.h5ad> \
+        --output-removed-cells-file <vireo_removed_cells.csv>
 """
 
 import argparse
@@ -60,19 +60,19 @@ def main(args: argparse.Namespace):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Drop vireo doublet/unassigned cells before filter")
     parser.add_argument(
-        "--adata_input", 
+        "--adata-input", 
         type=Path,
         required=True,
         help="Merged AnnData object from merge_and_plot_qc"
     )
     parser.add_argument(
-        "--adata_output",
+        "--adata-output",
         type=Path,
         required=True,
         help="AnnData object with vireo non-singlets removed"
     )
     parser.add_argument(
-        "--output_removed_cells_file",
+        "--output-removed-cells-file",
         type=Path,
         required=True,
         help="CSV of removed cells, same layout as filter's removed-cells report"
