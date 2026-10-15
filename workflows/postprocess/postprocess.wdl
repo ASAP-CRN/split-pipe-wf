@@ -38,10 +38,22 @@ workflow postprocess_entrypoint {
                 zones = zones
         }
     }
-    
+
+    call merge_and_plot_qc_metrics {
+        input:
+            dataset_id = dataset_id,
+            kit = kit,
+            prepped_adata_objects = prep_parse_sample.prepped_adata,
+            container_registry = container_registry,
+            zones = zones
+    }
+
     output {
         Array[File] vireo_joined_cell_meta = prep_parse_sample.vireo_joined_cell_meta
         Array[File] prepped_adata = prep_parse_sample.prepped_adata
+        File merged_adata = merge_and_plot_qc_metrics.merged_adata_object
+        File initial_metadata = merge_and_plot_qc_metrics.qc_initial_metadata_csv
+        Array[File] qc_plots = merge_and_plot_qc_metrics.qc_plots_png
     }
 }
 
@@ -105,7 +117,7 @@ task prep_parse_sample {
         cpu: threads
         cpuPlatform: "Intel Cascade Lake"
         memory: "~{mem_gb} GB"
-        disks: "local-disk ~{disk_size} SDD"
+        disks: "local-disk ~{disk_size} SSD"
         preemptible: 3
         zones: zones
     }
@@ -125,5 +137,71 @@ task prep_parse_sample {
 		subject_id: {help: "Single known donor for an un-pooled Parse sample. Mutually exclusive with donor_id_vireo_mapping."}
 		sample_csv: {help: "ASAP SAMPLE.csv."}
 		subject_csv: {help: "ASAP SUBJECT.csv."}
+	}
+}
+
+
+task merge_and_plot_qc_metrics {
+	input {
+        String dataset_id
+        String kit
+		Array[File] prepped_adata_objects
+		String container_registry
+		String zones
+	}
+
+    String prefix = "~{dataset_id}.~{kit}"
+
+	Int mem_gb = ceil(size(prepped_adata_objects, "GB") * 2.4 + 20)
+	Int disk_size = ceil(size(prepped_adata_objects, "GB") * 3 + 50)
+
+	command <<<
+		set -euo pipefail
+
+		while read -r adata_objects || [[ -n "${adata_objects}" ]]; do 
+			adata_path=$(realpath "${adata_objects}")
+			sample=$(basename "${adata_path}" "_prepped.h5ad")
+			echo -e "${sample}\t${adata_path}" >> adata_samples_paths.tsv
+		done < ~{write_lines(prepped_adata_objects)}
+
+		merge_and_plot_qc \
+			--adata-objects-fofn adata_samples_paths.tsv \
+			--adata-output ~{prefix}.merged_unfiltered.h5ad \
+			--output-metadata-file ~{prefix}.initial_metadata.csv
+	>>>
+
+	output {
+		File merged_adata_object = "~{prefix}.merged_unfiltered.h5ad"
+		File qc_initial_metadata_csv = "~{prefix}.initial_metadata.csv"
+		Array[File] qc_plots_png = [
+			"plots/n_genes_by_counts.violin.png",
+			"plots/total_counts.violin.png",
+			"plots/pct_counts_mt.violin.png",
+			"plots/pct_counts_rb.violin.png",
+			"plots/doublet_score.violin.png"
+		]
+	}
+
+	runtime {
+		docker: "~{container_registry}/sc_tools:1.3.0"
+		cpu: 4
+		cpuPlatform: "Intel Cascade Lake"
+		memory: "~{mem_gb} GB"
+		disks: "local-disk ~{disk_size} SSD"
+		preemptible: 3
+		bootDiskSizeGb: 40
+		zones: zones
+	}
+
+	meta {
+		description: "Merges Parse Bio sample-level AnnData objects to a single AnnData object and generates pre-filtering QC violin plots for key metrics."
+	}
+
+	parameter_meta {
+		dataset_id: {help: "ASAP dataset identifier; used in output names and batch_id."}
+		kit: {help: "Parse kit run (e.g. PB-001); used in output names."}
+		prepped_adata_objects: {help: "An array of Parse Sample-level AnnData objects to merge."}
+		container_registry: {help: "Container registry where workflow Docker images are hosted."}
+		zones: {help: "Space-delimited set of GCP zones to spin up compute in. ['us-central1-c us-central1-f']"}
 	}
 }
