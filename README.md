@@ -9,26 +9,33 @@ Common workflows, tasks, utility scripts, and docker images reused across harmon
 
 - [Workflows](#workflows)
 - [Inputs](#inputs)
+    - [Postprocess inputs](#postprocess-inputs)
 - [Outputs](#outputs)
-    - [Output structure](#output-structure)
+    - [Postprocess outputs](#postprocess-outputs)
 - [Docker images](#docker-images)
 
 
-> **Status: work in progress.** The `mkref → all → comb` skeleton runs end to end,
-> but outputs are not yet declared individually (see [Outputs](#outputs)), and no
-> downstream QC, doublet detection, or bucket staging is implemented.
+> **Status: work in progress.** The `mkref → all → comb` skeleton runs end to end.
+> Postprocessing (donor assignment, QC metrics, doublet scoring, filtering) runs as a
+> separate entrypoint on the `comb` output and is not yet wired into `main.wdl`.
+> Bucket staging is not yet implemented.
 
 
 # Workflows
 
 Workflows are defined in [the `workflows` directory](workflows).
 
-Workflow name:
-- `split_pipe_entrypoint`
+Workflow names:
+- `split_pipe_entrypoint`: `split-pipe` processing, from FASTQs to the combined (`comb`) output
+- `postprocess_entrypoint`: from the `comb` output to a filtered AnnData object per Parse run
 
-**Entrypoint**: [workflows/main.wdl](workflows/main.wdl)
+**Entrypoints**: [workflows/main.wdl](workflows/main.wdl), [workflows/postprocess/postprocess.wdl](workflows/postprocess/postprocess.wdl)
 
 **Input template**: [workflows/inputs_template.json](workflows/inputs_template.json)
+
+The Python scripts used by postprocessing are in [docker/parsebio_tools/scripts](docker/parsebio_tools/scripts). Merging, QC plotting and filtering reuse the `sc_tools` scripts from [sc-rnaseq-wf](https://github.com/ASAP-CRN/sc-rnaseq-wf), so QC metric definitions and filter thresholds match the 10X workflow.
+
+## split-pipe processing
 
 A Parse experiment is sequenced as several **sublibraries**, each an aliquot of
 one mixed pool of barcoded nuclei. Each is processed independently and the
@@ -47,6 +54,39 @@ combine_sublibraries     gather; resolves cells to samples across sublibraries (
 
 `combine_sublibraries` requires at least two sublibraries, and any subset of a kit run may be
 combined: each sublibrary contains a proportion of cells from all samples.
+
+## Postprocessing
+
+Run once per Parse run (one kit's worth of samples, e.g. `PB-001`), on that run's `comb` output.
+
+```
+prep_parse_sample          scattered, one call per Parse sample (e.g. pool_1)
+  ├── assign_donors.py         cells → subject, from a donor demultiplexing table (vireo)
+  │                            or a single known subject (un-pooled sample)
+  └── prep_parse_sample.py     AnnData from DGE_filtered; QC metrics, scrublet scores,
+                               ASAP SAMPLE/SUBJECT metadata
+        │
+merge_and_plot_qc_metrics  gather; concatenates Parse samples, pre-filter QC violin plots
+        │                  (sc_tools merge_and_plot_qc)
+filter
+  ├── drop_unassigned_cells.py drops cells without an ASAP sample (vireo doublet/unassigned)
+  └── filter                   sc_tools filter: mito, doublet score, count/gene limits and
+                               per-sample MAD outliers
+```
+
+Notes:
+
+- **Parse sample ≠ ASAP sample.** A Parse sample is what was loaded into round-1 wells. In
+  pooled designs it holds several donors, which are resolved per cell by `assign_donors.py`.
+  The ASAP sample ID is then looked up from (batch, subject); `split-pipe`'s own `sample`
+  column is kept as `parse_sample`.
+- **Cells come from `DGE_filtered`**, i.e. `split-pipe`'s own cell calling, for every Parse
+  sample, pooled or not.
+- **Doublets.** Scrublet runs on every called cell, including vireo doublets, so its
+  `doublet_score` sees the full doublet population. Vireo detects doublets between donors,
+  and scrublet detects doublets between cell types; both are applied.
+- **Cell IDs** are `<bc_wells>_<run_id>.<parse_sample>` (e.g. `01_01_15__s1_PB-001.pool_1`),
+  unique across Parse runs.
 
 
 # Inputs
@@ -70,7 +110,30 @@ An input template file can be found at
 | String? | zones | GCP zones where compute will take place. ['us-central1-c us-central1-f'] |
 
 The sample table is a property of the kit run, not of any one sublibrary — every
-sublibrary of a kit run takes the same file. 
+sublibrary of a kit run takes the same file.
+
+## Postprocess inputs
+
+| Type | Name | Description |
+| :- | :- | :- |
+| File | combined_sublibs_tar_gz | The `split-pipe --mode comb` output directory for one Parse run, as a gzipped tarball. |
+| String | dataset_id | ASAP dataset identifier; used in output names and `batch_id`. |
+| String | team_id | ASAP team identifier; used in `batch_id`. |
+| String | run_id | Parse run ID (e.g. `PB-001`); used in output names and cell IDs. |
+| String | batch | `SAMPLE.csv` batch value for this Parse run (e.g. `Batch1`). |
+| Array[[ParseSample](#parsesample)] | parse_samples | The Parse samples to process, and how to assign their cells to donors. |
+| File | sample_csv | ASAP `SAMPLE.csv`. |
+| File | subject_csv | ASAP `SUBJECT.csv`. |
+| Int | pct_counts_mt_max | Maximum percentage of mitochondrial gene counts allowed per cell. [10] |
+| Float | doublet_score_max | Maximum scrublet doublet score allowed per cell. [0.2] |
+| Array[Int] | total_counts_limits | Absolute minimum and maximum total UMI counts per cell, applied on top of the MAD-based thresholds. [500, 150000] |
+| Array[Int] | n_genes_by_counts_limits | Absolute minimum and maximum number of genes detected per cell, applied on top of the MAD-based thresholds. [300, 15000] |
+| Float | n_mads_lower | Number of MADs below the per-sample median allowed for total counts and genes detected. [3] |
+| Float | n_mads_upper | Number of MADs above the per-sample median allowed for total counts and genes detected. [5] |
+| String | container_registry | Container registry where workflow Docker images are hosted. |
+| String? | zones | GCP zones where compute will take place. ['us-central1-c us-central1-f'] |
+
+Filter defaults match sc-rnaseq-wf.
 
 ## Structs
 
@@ -81,6 +144,20 @@ sublibrary of a kit run takes the same file.
 | String | sublibrary_id | Identifier for the sublibrary; used to name its output directory and tarball. |
 | Array[File]+ | fastq_R1s | Read 1 (cDNA) FASTQs. Multiple files are accepted where a sublibrary was sequenced across lanes or runs. |
 | Array[File]+ | fastq_R2s | Read 2 (barcode) FASTQs, in the same order as `fastq_R1s`. |
+
+### ParseSample
+
+Exactly one of `vireo_donor_ids` and `subject_id` must be set.
+
+| Type | Name | Description |
+| :- | :- | :- |
+| String | parse_sample_name | Parse sample name, as in the sample table; must match a `comb` output subdirectory. |
+| File? | vireo_donor_ids | Vireo donor assignment TSV for a pooled Parse sample (columns `cell`, `donor_id`, ...); `cell` must match `split-pipe`'s `bc_wells`, including the `__s<n>` sublibrary suffix. |
+| String? | subject_id | Subject ID for an un-pooled Parse sample; assigned to every cell. |
+
+> `__s<n>` suffixes are assigned by `comb` from the order of the supplied sublibraries. Keep
+> sublibraries in the same order as the run the vireo table was computed on;
+> `assign_donors.py` fails if too few cells match.
 
 
 # Outputs
@@ -94,6 +171,37 @@ sublibrary of a kit run takes the same file.
 > AnnData objects and the HTML summaries — and staging them into raw and staging
 > buckets is not yet implemented.
 
+## Postprocess outputs
+
+| Type | Name | Description |
+| :- | :- | :- |
+| Array[File] | prepped_adata | Per Parse sample: `${dataset_id}.${run_id}.${parse_sample}.prepped.h5ad`, all called cells with donor assignments, QC metrics, scrublet scores and ASAP metadata. |
+| File | merged_adata | `${dataset_id}.${run_id}.merged_unfiltered.h5ad`; all Parse samples concatenated, before any filtering. |
+| File | initial_metadata | `${dataset_id}.${run_id}.initial_metadata.csv`; `obs` of the merged object. |
+| Array[File] | qc_plots | Pre-filter violin plots of `n_genes_by_counts`, `total_counts`, `pct_counts_mt`, `pct_counts_rb` and `doublet_score`. |
+| File | filtered_adata_object | `${dataset_id}.${run_id}.filtered.h5ad`; cells passing donor assignment and all QC filters. |
+| File | unassigned_removed_cells_csv | Cells removed for having no ASAP sample (vireo `doublet`/`unassigned`). |
+| File | filtered_out_cells_csv | Cells removed by `filter`, with a column per filter they failed. Same layout as `unassigned_removed_cells_csv`. |
+
+### AnnData contents
+
+Raw counts are in `X`. All genes are kept; no gene filtering is applied.
+
+| Location | Contents |
+| :- | :- |
+| `var` index | Gene symbol, made unique with a `-<n>` suffix as in sc-rnaseq-wf |
+| `var["gene_id"]`, `var["gene_id_versioned"]` | Ensembl ID without and with the GENCODE version suffix |
+| `obs["sample"]` | ASAP sample ID (`ASAP_sample_id`); `NA` for vireo doublet/unassigned cells |
+| `obs["parse_sample"]` | Parse sample the cell was loaded in (e.g. `pool_1`) |
+| `obs["subject_id"]` | Assigned subject, or `doublet`/`unassigned` |
+| `obs["vireo_*"]` | Vireo statistics (`prob_max`, `prob_doublet`, `n_vars` = informative SNPs, ...); `NA` for un-pooled samples |
+| `obs["n_genes_by_counts"]`, `obs["total_counts"]`, `obs["pct_counts_mt"]`, `obs["pct_counts_rb"]` | QC metrics, as in sc-rnaseq-wf |
+| `obs["doublet_score"]` | Scrublet doublet score, per Parse sample |
+| `obs["mread_count"]` | Sequencing reads per cell (`split-pipe`) |
+| `obs["bc1_well"]`, `obs["bc2_well"]`, `obs["bc3_well"]` | Plate wells for each barcoding round |
+| `obs["sex"]`, `obs["brain_region_level_1"]`–`obs["brain_region_level_3"]` | From ASAP metadata, lower-cased |
+| `obs["batch"]`, `obs["team"]`, `obs["dataset"]`, `obs["batch_id"]` | Run-level metadata; `batch_id` = `${team}_${dataset}_${batch}`, as in sc-rnaseq-wf |
+
 
 # Docker images
 
@@ -102,10 +210,16 @@ Docker images are defined in [the `docker` directory](docker). Each image must m
 Structure:
 ```bash
 docker
+├── parsebio_tools
+│   ├── build.env
+│   ├── Dockerfile
+│   └── scripts
 └── split_pipe
     ├── build.env
     └── Dockerfile
 ```
+
+`parsebio_tools` extends the sc-rnaseq-wf `sc_tools` image with the postprocessing scripts. The base is pinned by digest in `build.env` (`SC_TOOLS_DIGEST`), so library versions match the 10X workflow exactly.
 
 ## Acquiring split-pipe software
 
@@ -144,3 +258,4 @@ Docker images can be build using the [`build_docker_images`](https://github.com/
 | Image | Major tool versions | Links |
 | :- | :- | :- |
 | split_pipe | <ul><li>[split-pipe v1.8.2 (login required)](https://support.parsebiosciences.com/hc/en-us/articles/17200056667924-Pipeline-Download-Current-Version)</li><li>[google-cloud-cli 572.0.0](https://docs.cloud.google.com/sdk/docs/release-notes#57200_2026-06-09)</li><li>[python 3.12.8](https://www.python.org/downloads/release/python-3128/)</li><li>[miniconda 26.5.3](https://docs.anaconda.com/miniconda/miniconda-release-notes/)</li></ul> | [Dockerfile](https://github.com/ASAP-CRN/split-pipe-wf/tree/main/docker/split_pipe) |
+| parsebio_tools | <ul><li>Base: `sc_tools` 1.3.0, pinned by digest (scanpy, anndata and scrublet versions inherited)</li></ul> | [Dockerfile](https://github.com/ASAP-CRN/split-pipe-wf/tree/main/docker/parsebio_tools) |
