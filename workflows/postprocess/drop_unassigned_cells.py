@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 
 """
-Drop cells that were not assigned to a single donor (vireo doubles/unassigned) 
-from the merged Anndata object. Removed cells are written in the same layout as 
+Drop cells without an ASAP sample (vireo doublet/unassigned) from the merged AnnData
+object, before sc-rnaseq-wf's filter. Removed cells are written in the same layout as
 filter's --output-removed-cells-file so the two reports can be stacked.
 
 Usage
-    python drop_vireo_doublets.py \
+    python drop_unassigned_cells.py \
         --adata-input <merged.h5ad> \
-        --adata-output <vireo_filtered.h5ad> \
-        --output-removed-cells-file <vireo_removed_cells.csv>
+        --adata-output <assigned.h5ad> \
+        --output-removed-cells-file <unassigned_removed_cells.csv>
 """
 
 import argparse

@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
 
 """
-Join the donor/subject IDs and additional vireo statistics from the provided Team
-Voet Vireo table to the parse sample's cell metadata table to demultiplex cells 
-by donor. Warn if a significant proportion of donor IDs are missing, which may indicate 
-a mismatch between the provided tables.
+Assign a subject to every cell in one Parse sample's split-pipe cell metadata, from
+either a donor demultiplexing table (vireo) or a single known subject (un-pooled sample).
+Fails if too few cells match the vireo table, which indicates mismatched inputs (e.g.
+sublibrary order differing from the run vireo was computed on).
+
+Output: cell_metadata.csv with split-pipe's "sample" renamed to parse_sample, plus
+subject_id ("unassigned" for cells vireo did not call) and vireo_* statistics.
 
 Usage
-    python join_donor_ids_from_vireo.py 
-        --cell-meta <cell_meta.csv> \
-        --vireo <vireo.tsv> \
-        --subject-id <subject_id> \
-        --output <output.csv>
+    python assign_donors.py --cell-meta <cell_metadata.csv> --vireo <vireo.tsv> --output <out.csv>
+    python assign_donors.py --cell-meta <cell_metadata.csv> --subject-id <subject_id> --output <out.csv>
 """
 
 import argparse
@@ -25,7 +25,7 @@ logging.basicConfig(level=logging.INFO)
 
 def load_table(file_path: Path, check_join_key: str, sep: str = ",") -> pd.DataFrame:
     """
-    Loader for both cell metadata and vireo donoor mapping tables that checks that
+    Loader for both cell metadata and vireo donor mapping tables that checks that
     the expected join key is present in the table.
     """
     file_path = Path(file_path)
@@ -83,7 +83,8 @@ def join_cell_meta_and_vireo(
 
 def check_missing_subject_ids(join_df: pd.DataFrame, min_prop: float = 0.8) -> None:
     """
-    Check the proportion of missing subject IDs and log a warning if it exceeds the threshold.
+    Raise if the proportion of cells with a vireo subject is below min_prop; a low
+    match rate means the cell metadata and vireo table do not describe the same cells.
     """
     non_na_proportion = join_df['subject_id'].notna().mean()
     if non_na_proportion < min_prop:
@@ -114,6 +115,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--cell-meta",
         type=Path,
+        required=True,
         help="split-pipe cell_metadata.csv"
     )
     # Either a vireo table (pooled Parse sample) or a single subject ID (un-pooled), not both
