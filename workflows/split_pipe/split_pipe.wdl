@@ -18,9 +18,9 @@ workflow split_pipe_wf {
         String kit
         File sample_list_tsv
         File? parameter_file
-		
+        
         String container_registry
-		String zones
+        String zones
     }
 
     # Build reference genome index if it was not provided
@@ -103,8 +103,8 @@ task make_reference {
         String genome_name
         File genome_fasta
         File genes_gtf
-		String container_registry
-		String zones
+        String container_registry
+        String zones
     }
 
     Int threads = 16
