@@ -13,8 +13,20 @@ workflow postprocess_entrypoint {
         Array[ParseSample] parse_samples
         File sample_csv
         File subject_csv
-        File vireo_join_script  # This will be baked into the image once verified
-        File prep_metadata_script   # This will be baked into the image once verified
+        
+        # These will be baked into the image once verified
+        File vireo_join_script
+        File prep_metadata_script
+        File vireo_filter_script
+
+        # Filtering parameters
+		Int pct_counts_mt_max
+		Float doublet_score_max
+		Array[Int] total_counts_limits
+		Array[Int] n_genes_by_counts_limits
+		Float n_mads_lower
+		Float n_mads_upper
+
         String container_registry
         String zones = "us-central1-c us-central1-f"
 	}
@@ -48,12 +60,31 @@ workflow postprocess_entrypoint {
             zones = zones
     }
 
+    call filter {
+        input:
+            dataset_id = dataset_id,
+            kit = kit,
+            vireo_filter_script = vireo_filter_script,
+            merged_adata_object = merge_and_plot_qc_metrics.merged_adata_object,
+            pct_counts_mt_max = pct_counts_mt_max,
+            doublet_score_max = doublet_score_max,
+            total_counts_limits = total_counts_limits,
+            n_genes_by_counts_limits = n_genes_by_counts_limits,
+            n_mads_lower = n_mads_lower,
+            n_mads_upper = n_mads_upper,
+            container_registry = container_registry,
+            zones = zones
+    }
+
     output {
         Array[File] vireo_joined_cell_meta = prep_parse_sample.vireo_joined_cell_meta
         Array[File] prepped_adata = prep_parse_sample.prepped_adata
         File merged_adata = merge_and_plot_qc_metrics.merged_adata_object
         File initial_metadata = merge_and_plot_qc_metrics.qc_initial_metadata_csv
         Array[File] qc_plots = merge_and_plot_qc_metrics.qc_plots_png
+        File filtered_adata_object = filter.filtered_adata_object
+		File vireo_filtered_cells_csv = filter.vireo_filtered_cells_csv
+		File filtered_out_cells_csv = filter.filtered_out_cells_csv
     }
 }
 
@@ -174,12 +205,12 @@ task merge_and_plot_qc_metrics {
 		File merged_adata_object = "~{prefix}.merged_unfiltered.h5ad"
 		File qc_initial_metadata_csv = "~{prefix}.initial_metadata.csv"
 		Array[File] qc_plots_png = [
-			"plots/n_genes_by_counts.violin.png",
-			"plots/total_counts.violin.png",
-			"plots/pct_counts_mt.violin.png",
-			"plots/pct_counts_rb.violin.png",
-			"plots/doublet_score.violin.png"
-		]
+            "plots/violin_n_genes_by_counts.png",
+            "plots/violin_total_counts.png",
+            "plots/violin_pct_counts_mt.png",
+            "plots/violin_pct_counts_rb.png",
+            "plots/violin_doublet_score.png"
+        ]
 	}
 
 	runtime {
@@ -201,6 +232,87 @@ task merge_and_plot_qc_metrics {
 		dataset_id: {help: "ASAP dataset identifier; used in output names and batch_id."}
 		kit: {help: "Parse kit run (e.g. PB-001); used in output names."}
 		prepped_adata_objects: {help: "An array of Parse Sample-level AnnData objects to merge."}
+		container_registry: {help: "Container registry where workflow Docker images are hosted."}
+		zones: {help: "Space-delimited set of GCP zones to spin up compute in. ['us-central1-c us-central1-f']"}
+	}
+}
+
+
+task filter {
+	input {
+		String dataset_id
+		String kit
+		File merged_adata_object
+		File vireo_filter_script
+
+		Int pct_counts_mt_max
+		Float doublet_score_max
+		Array[Int] total_counts_limits
+		Array[Int] n_genes_by_counts_limits
+		Float n_mads_lower
+		Float n_mads_upper
+
+		String container_registry
+		String zones
+	}
+
+	String prefix = "~{dataset_id}.~{kit}"
+
+	Int calc_mem_gb = ceil(size(merged_adata_object, "GB") * 18 + 20)
+	Int mem_gb = if calc_mem_gb > 624 then 624 else calc_mem_gb
+	Int disk_size = ceil(size(merged_adata_object, "GB") * 4 + 20)
+
+	command <<<
+		set -euo pipefail
+
+		python3 ~{vireo_filter_script} \
+		--adata-input ~{merged_adata_object} \
+		--adata-output ~{prefix}.vireo_filtered.h5ad \
+		--output-removed-cells-file ~{prefix}.vireo_filtered_out_cells.csv
+		
+		filter \
+			--adata-input ~{prefix}.vireo_filtered.h5ad \
+			--pct-counts-mt-max ~{pct_counts_mt_max} \
+			--doublet-score-max ~{doublet_score_max} \
+			--total-counts-limits ~{sep=' ' total_counts_limits} \
+			--n-genes-by-counts-limits ~{sep=' ' n_genes_by_counts_limits} \
+			--n-mads-lower ~{n_mads_lower} \
+			--n-mads-upper ~{n_mads_upper} \
+			--adata-output ~{prefix}.filtered.h5ad \
+			--output-removed-cells-file ~{prefix}.filtered_out_cells.csv
+	>>>
+
+	output {
+		File filtered_adata_object = "~{prefix}.filtered.h5ad"
+		File vireo_filtered_cells_csv = "~{prefix}.vireo_filtered_out_cells.csv"
+		File filtered_out_cells_csv = "~{prefix}.filtered_out_cells.csv"
+	}
+
+	runtime {
+		docker: "~{container_registry}/sc_tools:1.3.0"
+		cpu: 4
+		cpuPlatform: "Intel Cascade Lake"
+		memory: "~{mem_gb} GB"
+		disks: "local-disk ~{disk_size} SSD"
+		preemptible: 3
+		bootDiskSizeGb: 40
+		zones: zones
+	}
+
+	meta {
+		description: "Filters low-quality cells from the merged AnnData object based on mitochondrial content, doublet score, total UMI counts, and number of detected genes. UMI count and detected gene thresholds combine absolute limits with per-sample median absolute deviation (MAD) cutoffs. Lists every removed cell and the filters it failed."
+	}
+
+	parameter_meta {
+		dataset_id: {help: "ASAP dataset identifier; used in output names and batch_id."}
+		kit: {help: "Parse kit run (e.g. PB-001); used in output names."}
+		merged_adata_object: {help: "Merged AnnData object."}
+		pct_counts_mt_max: {help: "Maximum percentage of mitochondrial gene counts allowed per cell. [10]"}
+		doublet_score_max: {help: "Maximum doublet detection score threshold. [0.2]"}
+		total_counts_limits: {help: "Absolute minimum and maximum total UMI (unique molecular identifier) counts per cell; applied on top of the MAD-based thresholds. [500, 150000]"}
+		n_genes_by_counts_limits: {help: "Absolute minimum and maximum number of genes detected per cell (genes with at least one count); applied on top of the MAD-based thresholds. [300, 15000]"}
+		n_mads_lower: {help: "Number of median absolute deviations below the per-sample median allowed for total UMI counts and number of genes detected per cell. [3]"}
+		n_mads_upper: {help: "Number of median absolute deviations above the per-sample median allowed for total UMI counts and number of genes detected per cell. [5]"}
 		container_registry: {help: "Container registry where workflow Docker images are hosted."}
 		zones: {help: "Space-delimited set of GCP zones to spin up compute in. ['us-central1-c us-central1-f']"}
 	}
