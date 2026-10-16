@@ -1,10 +1,15 @@
 #!/usr/bin/env python3
 
 """
-Build an AnnData object from split-pipe Parse DGE output, attach Vireo donor
-assignments, calculate QC and Scrublet metrics, and join ASAP sample metadata.
+Build an AnnData object for one Parse sample from split-pipe DGE output: attach donor
+assignments, compute QC metrics and Scrublet scores, and join ASAP SAMPLE/SUBJECT metadata.
 
-Related implementation: https://github.com/ASAP-CRN/sc-rnaseq-wf/blob/main/docker/sc_tools/scripts/main/prep_metadata
+Input contract with assign_donors.py: a CSV of split-pipe's cell_metadata.csv plus a
+subject_id column (and vireo_* columns, NA when the sample was not pooled), with bc_wells
+in the same order as count_matrix.mtx rows.
+
+QC metric definitions and the Scrublet call match sc-rnaseq-wf's prep_metadata:
+https://github.com/ASAP-CRN/sc-rnaseq-wf/blob/main/docker/sc_tools/scripts/main/prep_metadata
 """
 
 import argparse
@@ -19,11 +24,14 @@ logging.basicConfig(level=logging.INFO)
 
 def create_adata_object(data_path: Path) -> AnnData:
     """
-	Load the split-pipe matrix, gene annotations, and cell metadata into AnnData.
- 
- 	Expects count_matrix.mtx, all_genes.csv, and cell_metadata.csv in data_path.
-	Uses gene_name as the variable index and bc_wells as the observation index.
-	"""
+    Load the split-pipe matrix, gene annotations, and cell metadata into AnnData.
+
+    Expects count_matrix.mtx (cells x genes), all_genes.csv, and cell_metadata.csv in
+    data_path. Gene symbols (made unique) are the var index, with unversioned Ensembl IDs
+    in var["gene_id"] and the original GENCODE IDs in var["gene_id_versioned"]. bc_wells
+    is the obs index.
+    """
+
     mtx_path = data_path / "count_matrix.mtx"
     gene_path = data_path / "all_genes.csv"
     cell_meta_path = data_path / "cell_metadata.csv"
@@ -52,36 +60,37 @@ def create_adata_object(data_path: Path) -> AnnData:
     return adata
 
 
-# TODO: revist this logic w.r.t. join_donor_ids_from_vireo (also name sucks)
-def add_vireo_joined_metadata(adata: AnnData, vireo_joined_metadata_path: Path) -> AnnData:
+def add_donor_assignments(adata: AnnData, donor_assignments_path: Path) -> AnnData:
     """
-    Replace the observation metadata with the Vireo-joined cell metadata.
+    Replace obs with the donor-assigned cell metadata from assign_donors.py.
 
-    The CSV must contain a bc_wells column whose values and order exactly match
-    adata.obs_names.
+    The CSV is split-pipe's cell_metadata.csv plus subject_id and vireo_* columns; its
+    bc_wells values and order must match the count matrix rows exactly.
     """
-    if not vireo_joined_metadata_path.exists():
-        raise FileNotFoundError(f"Vireo metadata file not found: {vireo_joined_metadata_path}")
+    if not donor_assignments_path.exists():
+        raise FileNotFoundError(f"Donor assignments file not found: {donor_assignments_path}")
 
-    vireo_meta_df = pd.read_csv(vireo_joined_metadata_path, index_col="bc_wells")
-    
-    if not adata.obs_names.equals(vireo_meta_df.index):
-        raise ValueError("Cell order in the joined metadata does not match count_matrix.mtx rows")
-    
-    adata.obs = vireo_meta_df
+    assignments = pd.read_csv(donor_assignments_path, index_col="bc_wells")
+
+    if not adata.obs_names.equals(assignments.index):
+        raise ValueError("Cell order in the donor assignments does not match count_matrix.mtx rows")
+
+    adata.obs = assignments
 
     return adata
 
 
 def add_qc_metrics(adata: AnnData) -> AnnData:
     """
-    Calculate gene-level and cell-level QC metrics, then add Scrublet scores.
-    
-    Mitochondrial and ribosomal genes are identified from gene-name prefixes.
-    Checks that split-pipe gene_count and tscp_count match Scanpy's calculated
-    counts, then removes those redundant columns and Scrublet's predicted_doublet
-    column.
-	"""
+    Calculate gene- and cell-level QC metrics, then add Scrublet doublet scores.
+
+    Mitochondrial and ribosomal genes are identified from gene-symbol prefixes, as in
+    sc-rnaseq-wf. split-pipe's gene_count and tscp_count are checked against Scanpy's
+    n_genes_by_counts and total_counts, then dropped as redundant. Scrublet runs on all
+    called cells, including vireo doublet/unassigned, with default parameters;
+    predicted_doublet is dropped in favour of doublet_score.
+    """
+
     adata.var["mt"] = adata.var_names.str.contains(r"^MT-", case=False, regex=True)
     if not adata.var["mt"].any():
         logging.warning("No mitochondrial genes found using case-insensitive MT- prefix")
@@ -120,8 +129,9 @@ def build_sample_lookup(
     parse_sample: str | None = None,
 ) -> pd.DataFrame:
     """
-    Build a lookup table with one row per subject_id in this batch (kit), carrying the
-    donor-level ASAP metadata (sample IDs, regions, sex) for joining to the AnnData object.
+    Build a lookup table with one row per subject_id in this batch (Parse run),
+    carrying the donor-level ASAP metadata (sample IDs, regions, sex) for joining
+    to the AnnData object.
 
     SAMPLE.csv is one row per (sublibrary x sample), so it is first collapsed to one row
     per sample. A subject with more than one sample in the same batch (e.g. SN + ACG in
@@ -173,7 +183,7 @@ def join_asap_metadata(
     Join ASAP SAMPLE and SUBJECT metadata to the AnnData object, with field names and
     formatting matching sc-rnaseq-wf's prep_metadata:
 
-    Kit-level, assigned to every cell (including vireo doublet/unassigned):
+    Run-level, assigned to every cell (including vireo doublet/unassigned):
     - batch, team, dataset, batch_id = f"{team}_{dataset}_{batch}"
 
     Donor-level, from the lookup (NA for vireo doublet/unassigned):
@@ -197,7 +207,7 @@ def join_asap_metadata(
     for col in ["sex", "brain_region_level_1", "brain_region_level_2", "brain_region_level_3"]:
         obs[col] = obs[col].map(lambda x: x.lower() if isinstance(x, str) else x)
 
-    # Kit-level fields hold for every cell in the pool, so assign as scalars
+    # Run-level fields hold for every cell in the Parse run, so assign as scalars
     obs["batch"] = batch
     obs["team"] = team
     obs["dataset"] = dataset
@@ -214,23 +224,24 @@ def join_asap_metadata(
 def main(args: argparse.Namespace):
     
     adata = create_adata_object(data_path=args.data_dir)
-    adata = add_vireo_joined_metadata(adata, args.vireo_metadata_path)
+    adata = add_donor_assignments(adata, args.donor_assignments)
     adata = add_qc_metrics(adata)
     sample_df = pd.read_csv(args.sample_path)
     subject_df = pd.read_csv(args.subject_path)
-    
+
     adata = join_asap_metadata(
-        adata, 
+        adata,
         sample_df=sample_df,
-        subject_df=subject_df, 
-        batch=args.batch, 
-        team=args.team, 
+        subject_df=subject_df,
+        batch=args.batch,
+        team=args.team,
         dataset=args.dataset,
-    	# TODO(PB-002): pass a sample map for runs  where a subject has
-        # multiple ASAP samples; without one, build_sample_lookup raises an error.
+        # TODO(PB-002): pass a sample map for runs where a subject has multiple ASAP
+        # samples; without one, build_sample_lookup raises an error naming them
         sample_map=None,
-        parse_sample=None
+        parse_sample=None,
     )
+
     
     adata.write_h5ad(filename=args.output, compression="gzip")
     logging.info("Saved AnnData object to %s", args.output)
@@ -250,11 +261,11 @@ if __name__ == "__main__":
         help="split-pipe DGE directory (count_matrix.mtx, all_genes.csv, cell_metadata.csv)"
     )    
     parser.add_argument(
-        "--vireo-metadata-path", 
-        type=Path, 
+        "--donor-assignments",
+        type=Path,
         required=True,
-        help="Cell metadata CSV with donor assignments from join_donor_ids_from_vireo.py"
-    )    
+        help="Cell metadata CSV with subject_id from assign_donors.py"
+    )
     parser.add_argument(
         "--output",
         required=True,
