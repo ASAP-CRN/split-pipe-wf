@@ -12,3 +12,14 @@ struct ParseSample {
     File? vireo_donor_ids
     String? subject_id
 }
+
+
+struct ParseRun {
+    String run_id
+    String kit
+    String chemistry
+    String batch
+    File sample_list_tsv
+    Array[Sublibrary] sublibraries
+    Array [ParseSample] parse_samples
+}
