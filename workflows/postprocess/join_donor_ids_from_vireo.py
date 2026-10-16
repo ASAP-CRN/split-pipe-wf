@@ -66,7 +66,7 @@ def join_cell_meta_and_vireo(
     if vireo_df is not None:
         join_df = pd.merge(cell_meta, vireo_df, left_on="bc_wells", right_on="cell", how="left")
         join_df.drop(columns=["cell"], inplace=True)
-        join_df.rename(columns={"donor_id": "subject_id", **vireo_renames})
+        join_df = join_df.rename(columns={"donor_id": "subject_id", **vireo_renames})
         
         # Check the proportion of missing subject IDs and set NAs to "unassigned"
         check_missing_subject_ids(join_df)
