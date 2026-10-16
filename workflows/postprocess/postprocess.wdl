@@ -15,11 +15,6 @@ workflow postprocess_entrypoint {
         File sample_csv
         File subject_csv
 
-        # These will be baked into the image once verified
-        File assign_donors_script
-        File prep_script
-        File drop_unassigned_script
-
         # Filtering parameters
         Int pct_counts_mt_max
         Float doublet_score_max
@@ -45,8 +40,6 @@ workflow postprocess_entrypoint {
                 subject_id = parse_sample.subject_id,
                 sample_csv = sample_csv,
                 subject_csv = subject_csv,
-                assign_donors_script = assign_donors_script,
-                prep_script = prep_script,
                 container_registry = container_registry,
                 zones = zones
         }
@@ -65,7 +58,6 @@ workflow postprocess_entrypoint {
         input:
             dataset_id = dataset_id,
             run_id = run_id,
-            drop_unassigned_script = drop_unassigned_script,
             merged_adata_object = merge_and_plot_qc_metrics.merged_adata_object,
             pct_counts_mt_max = pct_counts_mt_max,
             doublet_score_max = doublet_score_max,
@@ -120,8 +112,6 @@ task prep_parse_sample {
         String? subject_id
         File sample_csv
         File subject_csv
-        File assign_donors_script
-        File prep_script
         String container_registry
         String zones
     }
@@ -140,13 +130,13 @@ task prep_parse_sample {
         tar -xzf ~{combined_sublibs_tar_gz}
         dge_dir="combined_sublibs/~{sample_name}/DGE_filtered"
 
-        python3 ~{assign_donors_script} \
+        python3 assign_donors.py \
             --cell-meta "${dge_dir}/cell_metadata.csv" \
             ~{"--vireo " + donor_id_vireo_mapping} \
             ~{"--subject-id " + subject_id} \
             --output ~{donor_assignments}
 
-        python3 ~{prep_script} \
+        python3 prep_parse_sample.py \
             --data-dir "${dge_dir}" \
             --donor-assignments ~{donor_assignments} \
             --sample-path ~{sample_csv} \
@@ -163,7 +153,7 @@ task prep_parse_sample {
     }
 
     runtime {
-        docker: "~{container_registry}/sc_tools:1.3.0"
+        docker: "~{container_registry}/parsebio_tools:0.1.0"
         cpu: threads
         cpuPlatform: "Intel Cascade Lake"
         memory: "~{mem_gb} GB"
@@ -236,7 +226,7 @@ task merge_and_plot_qc_metrics {
     }
 
     runtime {
-        docker: "~{container_registry}/sc_tools:1.3.0"
+        docker: "~{container_registry}/parsebio_tools:0.1.0"
         cpu: 4
         cpuPlatform: "Intel Cascade Lake"
         memory: "~{mem_gb} GB"
@@ -265,7 +255,6 @@ task filter {
         String dataset_id
         String run_id
         File merged_adata_object
-        File drop_unassigned_script
 
         Int pct_counts_mt_max
         Float doublet_score_max
@@ -287,7 +276,7 @@ task filter {
     command <<<
         set -euo pipefail
 
-        python3 ~{drop_unassigned_script} \
+        python3 drop_unassigned_cells.py \
             --adata-input ~{merged_adata_object} \
             --adata-output ~{prefix}.assigned.h5ad \
             --output-removed-cells-file ~{prefix}.unassigned_removed_cells.csv
@@ -311,7 +300,7 @@ task filter {
     }
 
     runtime {
-        docker: "~{container_registry}/sc_tools:1.3.0"
+        docker: "~{container_registry}/parsebio_tools:0.1.0"
         cpu: 4
         cpuPlatform: "Intel Cascade Lake"
         memory: "~{mem_gb} GB"
