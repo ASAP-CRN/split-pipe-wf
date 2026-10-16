@@ -14,7 +14,7 @@ workflow postprocess_entrypoint {
         Array[ParseSample] parse_samples
         File sample_csv
         File subject_csv
-        
+
         # These will be baked into the image once verified
         File assign_donors_script
         File prep_script
@@ -31,8 +31,8 @@ workflow postprocess_entrypoint {
         String container_registry
         String zones = "us-central1-c us-central1-f"
     }
-    
-     scatter (parse_sample in parse_samples) {
+
+    scatter (parse_sample in parse_samples) {
         call prep_parse_sample {
             input:
                 combined_sublibs_tar_gz = combined_sublibs_tar_gz,
@@ -83,7 +83,7 @@ workflow postprocess_entrypoint {
         File initial_metadata = merge_and_plot_qc_metrics.qc_initial_metadata_csv
         Array[File] qc_plots = merge_and_plot_qc_metrics.qc_plots_png
         File filtered_adata_object = filter.filtered_adata_object
-        File vireo_filtered_cells_csv = filter.vireo_filtered_cells_csv
+        File unassigned_removed_cells_csv = filter.unassigned_removed_cells_csv
         File filtered_out_cells_csv = filter.filtered_out_cells_csv
     }
 
@@ -127,11 +127,11 @@ task prep_parse_sample {
     }
 
     String prefix = "~{dataset_id}.~{run_id}.~{sample_name}"
-    String joined_meta = "~{prefix}_vireo_joined_cell_meta.csv"
-    String adata_out = "~{prefix}_prepped.h5ad"
+    String donor_assignments = "~{prefix}.donor_assignments.csv"
+    String adata_out = "~{prefix}.prepped.h5ad"
 
     Int threads = 4
-    Int mem_gb = 16  
+    Int mem_gb = 16
     Int disk_size = ceil((size(combined_sublibs_tar_gz, "GB") * 3) + 20)
 
     command <<<
@@ -144,11 +144,11 @@ task prep_parse_sample {
             --cell-meta "${dge_dir}/cell_metadata.csv" \
             ~{"--vireo " + donor_id_vireo_mapping} \
             ~{"--subject-id " + subject_id} \
-            --output ~{joined_meta}
+            --output ~{donor_assignments}
 
         python3 ~{prep_script} \
             --data-dir "${dge_dir}" \
-            --donor-assignments ~{joined_meta} \
+            --donor-assignments ~{donor_assignments} \
             --sample-path ~{sample_csv} \
             --subject-path ~{subject_csv} \
             --batch ~{batch} \
@@ -158,7 +158,7 @@ task prep_parse_sample {
     >>>
 
     output {
-        File vireo_joined_cell_meta = joined_meta
+        File vireo_joined_cell_meta = donor_assignments
         File prepped_adata = adata_out
     }
 
@@ -212,7 +212,7 @@ task merge_and_plot_qc_metrics {
 
         while read -r adata_object || [[ -n "${adata_object}" ]]; do
             adata_path=$(realpath "${adata_object}")
-            sample=$(basename "${adata_path}" "_prepped.h5ad")
+            sample=$(basename "${adata_path}" ".prepped.h5ad")
             sample="${sample#~{dataset_id}.}"
             echo -e "${sample}\t${adata_path}" >> adata_samples_paths.tsv
         done < ~{write_lines(prepped_adata_objects)}
@@ -288,12 +288,12 @@ task filter {
         set -euo pipefail
 
         python3 ~{drop_unassigned_script} \
-        --adata-input ~{merged_adata_object} \
-        --adata-output ~{prefix}.vireo_filtered.h5ad \
-        --output-removed-cells-file ~{prefix}.vireo_filtered_out_cells.csv
-        
+            --adata-input ~{merged_adata_object} \
+            --adata-output ~{prefix}.assigned.h5ad \
+            --output-removed-cells-file ~{prefix}.unassigned_removed_cells.csv
+
         filter \
-            --adata-input ~{prefix}.vireo_filtered.h5ad \
+            --adata-input ~{prefix}.assigned.h5ad \
             --pct-counts-mt-max ~{pct_counts_mt_max} \
             --doublet-score-max ~{doublet_score_max} \
             --total-counts-limits ~{sep=' ' total_counts_limits} \
@@ -306,7 +306,7 @@ task filter {
 
     output {
         File filtered_adata_object = "~{prefix}.filtered.h5ad"
-        File vireo_filtered_cells_csv = "~{prefix}.vireo_filtered_out_cells.csv"
+        File unassigned_removed_cells_csv = "~{prefix}.unassigned_removed_cells.csv"
         File filtered_out_cells_csv = "~{prefix}.filtered_out_cells.csv"
     }
 

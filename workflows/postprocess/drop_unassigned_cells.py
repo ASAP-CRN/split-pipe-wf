@@ -27,7 +27,7 @@ REPORT_COLS = ["sample", "batch_id", "team", "dataset", "brain_region_level_1",
                "pct_counts_mt", "doublet_score", "total_counts", "n_genes_by_counts"]
 
 
-def drop_nonsinglets(adata_input: Path) -> tuple[AnnData, pd.DataFrame]:
+def drop_unassigned(adata_input: Path) -> tuple[AnnData, pd.DataFrame]:
     """
     Keep cells that resolved to an ASAP sample. Cells without one are vireo doublet or
     unassigned calls, including cells split-pipe called that vireo did not.
@@ -51,7 +51,7 @@ def drop_nonsinglets(adata_input: Path) -> tuple[AnnData, pd.DataFrame]:
 
 
 def main(args: argparse.Namespace):
-    adata, removed_cells = drop_nonsinglets(args.adata_input)
+    adata, removed_cells = drop_unassigned(args.adata_input)
     adata.write_h5ad(filename=args.adata_output, compression="lzf")
     removed_cells.to_csv(args.output_removed_cells_file, index=True, index_label="barcode")
     logging.info("Wrote %s and %s", args.adata_output, args.output_removed_cells_file)
@@ -60,7 +60,7 @@ def main(args: argparse.Namespace):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Drop vireo doublet/unassigned cells before filter")
     parser.add_argument(
-        "--adata-input", 
+        "--adata-input",
         type=Path,
         required=True,
         help="Merged AnnData object from merge_and_plot_qc"

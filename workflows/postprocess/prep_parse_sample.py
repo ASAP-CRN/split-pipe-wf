@@ -35,7 +35,7 @@ def create_adata_object(data_path: Path) -> AnnData:
     mtx_path = data_path / "count_matrix.mtx"
     gene_path = data_path / "all_genes.csv"
     cell_meta_path = data_path / "cell_metadata.csv"
-    
+
     if not mtx_path.exists():
         raise FileNotFoundError(f"Matrix file not found: {mtx_path}")
     if not gene_path.exists():
@@ -46,7 +46,7 @@ def create_adata_object(data_path: Path) -> AnnData:
     adata = sc.read_mtx(mtx_path)
     gene_data = pd.read_csv(gene_path)
     cell_meta_df = pd.read_csv(cell_meta_path)
-    
+
     adata.var = gene_data.set_index("gene_name", drop=False)
     adata.var_names_make_unique()
     adata.var.index.name = "gene_symbol_unique"
@@ -106,18 +106,18 @@ def add_qc_metrics(adata: AnnData) -> AnnData:
         log1p=False,
         inplace=True,
     )
-    
+
     # Remove redundant columns with split-pipe output
     if not (adata.obs["gene_count"] == adata.obs["n_genes_by_counts"]).all():
         raise ValueError("split-pipe gene_count disagrees with n_genes_by_counts")
     if not (adata.obs["tscp_count"] == adata.obs["total_counts"]).all():
         raise ValueError("split-pipe tscp_count disagrees with total_counts")
     adata.obs.drop(columns=["gene_count", "tscp_count"], inplace=True)
-    
+
     # Scrublet: drop predicted_doublet; rely on the probability of doublet (i.e., doublet_score)
     sc.pp.scrublet(adata)
     adata.obs.drop("predicted_doublet", axis=1, inplace=True)
-    
+
     return adata
 
 
@@ -222,7 +222,7 @@ def join_asap_metadata(
 
 
 def main(args: argparse.Namespace):
-    
+
     adata = create_adata_object(data_path=args.data_dir)
     adata = add_donor_assignments(adata, args.donor_assignments)
     adata = add_qc_metrics(adata)
@@ -242,10 +242,9 @@ def main(args: argparse.Namespace):
         parse_sample=None,
     )
 
-    
-    adata.write_h5ad(filename=args.output, compression="gzip")
+    adata.write_h5ad(filename=args.output, compression="lzf")
     logging.info("Saved AnnData object to %s", args.output)
-    
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
@@ -255,11 +254,11 @@ if __name__ == "__main__":
                     "ASAP SAMPLE/SUBJECT metadata."
     )
     parser.add_argument(
-        "--data-dir", 
+        "--data-dir",
         type=Path,
-        required=True, 
+        required=True,
         help="split-pipe DGE directory (count_matrix.mtx, all_genes.csv, cell_metadata.csv)"
-    )    
+    )
     parser.add_argument(
         "--donor-assignments",
         type=Path,
@@ -269,18 +268,18 @@ if __name__ == "__main__":
     parser.add_argument(
         "--output",
         required=True,
-        type=Path, 
+        type=Path,
         help="Output h5ad"
     )
     parser.add_argument(
-        "--sample-path", 
-        type=Path, 
+        "--sample-path",
+        type=Path,
         required=True,
         help="ASAP SAMPLE.csv"
     )
     parser.add_argument(
-        "--subject-path", 
-        type=Path, 
+        "--subject-path",
+        type=Path,
         required=True,
         help="ASAP SUBJECT.csv"
     )
@@ -299,6 +298,6 @@ if __name__ == "__main__":
         required=True,
         help="Dataset identifier (e.g. team-voet-pmdbs-sn-rnaseq-parsebio)"
     )
-    
+
     args = parser.parse_args()
     main(args)
