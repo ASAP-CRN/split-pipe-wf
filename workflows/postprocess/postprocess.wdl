@@ -130,13 +130,13 @@ task prep_parse_sample {
         tar -xzf ~{combined_sublibs_tar_gz}
         dge_dir="combined_sublibs/~{sample_name}/DGE_filtered"
 
-        python3 assign_donors.py \
+        assign_donors.py \
             --cell-meta "${dge_dir}/cell_metadata.csv" \
             ~{"--vireo " + donor_id_vireo_mapping} \
             ~{"--subject-id " + subject_id} \
             --output ~{donor_assignments}
 
-        python3 prep_parse_sample.py \
+        prep_parse_sample.py \
             --data-dir "${dge_dir}" \
             --donor-assignments ~{donor_assignments} \
             --sample-path ~{sample_csv} \
@@ -276,7 +276,7 @@ task filter {
     command <<<
         set -euo pipefail
 
-        python3 drop_unassigned_cells.py \
+        drop_unassigned_cells.py \
             --adata-input ~{merged_adata_object} \
             --adata-output ~{prefix}.assigned.h5ad \
             --output-removed-cells-file ~{prefix}.unassigned_removed_cells.csv
