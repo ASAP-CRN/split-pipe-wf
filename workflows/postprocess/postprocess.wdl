@@ -1,5 +1,6 @@
 version 1.0
-# Wrapper WDL for testing the Vireo and QC steps by pointing to intermediate combined sublibraries
+
+# Take the combined sublibaries output from split-pipe to create a cleaned Anndata object.
 
 import "../structs.wdl"
 
@@ -8,7 +9,7 @@ workflow postprocess_entrypoint {
 		File combined_sublibs_tar_gz
         String dataset_id
         String team_id
-        String kit
+        String run_id
         String batch
         Array[ParseSample] parse_samples
         File sample_csv
@@ -37,7 +38,7 @@ workflow postprocess_entrypoint {
                 combined_sublibs_tar_gz = combined_sublibs_tar_gz,
                 dataset_id = dataset_id,
                 team_id = team_id,
-                kit = kit,
+                run_id = run_id,
                 batch = batch,
                 sample_name = parse_sample.parse_sample_name,
                 donor_id_vireo_mapping = parse_sample.vireo_donor_ids,
@@ -54,7 +55,7 @@ workflow postprocess_entrypoint {
     call merge_and_plot_qc_metrics {
         input:
             dataset_id = dataset_id,
-            kit = kit,
+            run_id = run_id,
             prepped_adata_objects = prep_parse_sample.prepped_adata,
             container_registry = container_registry,
             zones = zones
@@ -63,7 +64,7 @@ workflow postprocess_entrypoint {
     call filter {
         input:
             dataset_id = dataset_id,
-            kit = kit,
+            run_id = run_id,
             vireo_filter_script = vireo_filter_script,
             merged_adata_object = merge_and_plot_qc_metrics.merged_adata_object,
             pct_counts_mt_max = pct_counts_mt_max,
@@ -77,7 +78,6 @@ workflow postprocess_entrypoint {
     }
 
     output {
-        Array[File] vireo_joined_cell_meta = prep_parse_sample.vireo_joined_cell_meta
         Array[File] prepped_adata = prep_parse_sample.prepped_adata
         File merged_adata = merge_and_plot_qc_metrics.merged_adata_object
         File initial_metadata = merge_and_plot_qc_metrics.qc_initial_metadata_csv
@@ -94,7 +94,7 @@ task prep_parse_sample {
         File combined_sublibs_tar_gz
         String dataset_id
         String team_id
-        String kit
+        String run_id
         String batch
         String sample_name
         File? donor_id_vireo_mapping
@@ -107,7 +107,7 @@ task prep_parse_sample {
         String zones
     }
 
-    String prefix = "~{dataset_id}.~{kit}.~{sample_name}"
+    String prefix = "~{dataset_id}.~{run_id}.~{sample_name}"
     String joined_meta = "~{prefix}_vireo_joined_cell_meta.csv"
     String adata_out = "~{prefix}_prepped.h5ad"
 
@@ -122,16 +122,16 @@ task prep_parse_sample {
         dge_dir="combined_sublibs/~{sample_name}/DGE_filtered"
 
         python3 ~{vireo_join_script} \
-            --cell_meta "${dge_dir}/cell_metadata.csv" \
+            --cell-meta "${dge_dir}/cell_metadata.csv" \
             ~{"--vireo " + donor_id_vireo_mapping} \
-            ~{"--subject_id " + subject_id} \
+            ~{"--subject-id " + subject_id} \
             --output ~{joined_meta}
 
         python3 ~{prep_metadata_script} \
-            --data_dir "${dge_dir}" \
-            --vireo_metadata_path ~{joined_meta} \
-            --sample_path ~{sample_csv} \
-            --subject_path ~{subject_csv} \
+            --data-dir "${dge_dir}" \
+            --vireo-metadata-path ~{joined_meta} \
+            --sample-path ~{sample_csv} \
+            --subject-path ~{subject_csv} \
             --batch ~{batch} \
             --team ~{team_id} \
             --dataset ~{dataset_id} \
@@ -139,7 +139,7 @@ task prep_parse_sample {
     >>>
 
     output {
-        File vireo_joined_cell_meta = joined_meta  # TODO: necessary to keep?
+        File vireo_joined_cell_meta = joined_meta
         File prepped_adata = adata_out
     }
 
@@ -161,7 +161,7 @@ task prep_parse_sample {
         combined_sublibs_tar_gz: {help: "Tarball of the split-pipe comb output directory."}
 		dataset_id: {help: "ASAP dataset identifier; used in output names and batch_id."}
 		team_id: {help: "ASAP team identifier; used in batch_id."}
-		kit: {help: "Parse kit run (e.g. PB-001); used in output names."}
+		run_id: {help: "Parse run ID (e.g. PB-001); used in output names."}
 		batch: {help: "SAMPLE.csv batch value for this kit run (e.g. Batch1)."}
 		sample_name: {help: "Parse sample name; must match a comb output subdirectory."}
 		donor_id_vireo_mapping: {help: "Vireo donor assignment TSV for a pooled Parse sample. Mutually exclusive with subject_id."}
@@ -175,13 +175,13 @@ task prep_parse_sample {
 task merge_and_plot_qc_metrics {
 	input {
         String dataset_id
-        String kit
+        String run_id
 		Array[File] prepped_adata_objects
 		String container_registry
 		String zones
 	}
 
-    String prefix = "~{dataset_id}.~{kit}"
+    String prefix = "~{dataset_id}.~{run_id}"
 
 	Int mem_gb = ceil(size(prepped_adata_objects, "GB") * 2.4 + 20)
 	Int disk_size = ceil(size(prepped_adata_objects, "GB") * 3 + 50)
@@ -230,7 +230,7 @@ task merge_and_plot_qc_metrics {
 
 	parameter_meta {
 		dataset_id: {help: "ASAP dataset identifier; used in output names and batch_id."}
-		kit: {help: "Parse kit run (e.g. PB-001); used in output names."}
+		run_id: {help: "Parse run ID (e.g. PB-001); used in output names."}
 		prepped_adata_objects: {help: "An array of Parse Sample-level AnnData objects to merge."}
 		container_registry: {help: "Container registry where workflow Docker images are hosted."}
 		zones: {help: "Space-delimited set of GCP zones to spin up compute in. ['us-central1-c us-central1-f']"}
@@ -241,7 +241,7 @@ task merge_and_plot_qc_metrics {
 task filter {
 	input {
 		String dataset_id
-		String kit
+		String run_id
 		File merged_adata_object
 		File vireo_filter_script
 
@@ -256,7 +256,7 @@ task filter {
 		String zones
 	}
 
-	String prefix = "~{dataset_id}.~{kit}"
+	String prefix = "~{dataset_id}.~{run_id}"
 
 	Int calc_mem_gb = ceil(size(merged_adata_object, "GB") * 18 + 20)
 	Int mem_gb = if calc_mem_gb > 624 then 624 else calc_mem_gb
@@ -305,7 +305,7 @@ task filter {
 
 	parameter_meta {
 		dataset_id: {help: "ASAP dataset identifier; used in output names and batch_id."}
-		kit: {help: "Parse kit run (e.g. PB-001); used in output names."}
+		run_id: {help: "Parse run ID (e.g. PB-001); used in output names."}
 		merged_adata_object: {help: "Merged AnnData object."}
 		pct_counts_mt_max: {help: "Maximum percentage of mitochondrial gene counts allowed per cell. [10]"}
 		doublet_score_max: {help: "Maximum doublet detection score threshold. [0.2]"}
