@@ -31,12 +31,12 @@ def load_table(file_path: Path, check_join_key: str, sep: str = ",") -> pd.DataF
     file_path = Path(file_path)
     if not file_path.exists():
         raise FileNotFoundError(f"File {file_path} does not exist")
-    
+
     df = pd.read_csv(file_path, sep=sep)
-    
+
     if check_join_key not in df.columns:
         raise ValueError(f"Join key {check_join_key} not found in {file_path}")
-    
+
     return df
 
 
@@ -45,9 +45,9 @@ def load_table(file_path: Path, check_join_key: str, sep: str = ",") -> pd.DataF
 VIREO_STAT_COLS = ["prob_max", "prob_doublet", "n_vars", "best_singlet", "best_doublet", "doublet_logLikRatio"]
 
 
-def join_cell_meta_and_vireo(
-    cell_meta: pd.DataFrame, 
-    vireo_df: pd.DataFrame | None, 
+def assign_subjects(
+    cell_meta: pd.DataFrame,
+    vireo_df: pd.DataFrame | None,
     subject_id: str | None,
 ) -> pd.DataFrame:
     """
@@ -62,22 +62,22 @@ def join_cell_meta_and_vireo(
     """
     cell_meta = cell_meta.rename(columns={"sample": "parse_sample"})
     vireo_renames = {c: f"vireo_{c}" for c in VIREO_STAT_COLS}
-    
+
     if vireo_df is not None:
         join_df = pd.merge(cell_meta, vireo_df, left_on="bc_wells", right_on="cell", how="left")
         join_df.drop(columns=["cell"], inplace=True)
         join_df = join_df.rename(columns={"donor_id": "subject_id", **vireo_renames})
-        
+
         # Check the proportion of missing subject IDs and set NAs to "unassigned"
         check_missing_subject_ids(join_df)
         join_df["subject_id"] = join_df["subject_id"].fillna("unassigned")
-        
+
     else:
         join_df = cell_meta.copy()
         join_df["subject_id"] = subject_id
         for col in vireo_renames.values():
             join_df[col] = np.nan
-            
+
     return join_df
 
 
@@ -98,13 +98,13 @@ def main(args: argparse.Namespace):
 
     # split-pipe meta output as .csv, provided vireo tables are .tsv
     cell_meta = load_table(args.cell_meta, sep=",", check_join_key="bc_wells")
-    
+
     if args.vireo is not None:
         vireo_df = load_table(args.vireo, sep="\t", check_join_key="cell")
     else:
         vireo_df = None
 
-    join_data = join_cell_meta_and_vireo(cell_meta, vireo_df, subject_id=args.subject_id)
+    join_data = assign_subjects(cell_meta, vireo_df, subject_id=args.subject_id)
     join_data.to_csv(args.output, index=False)
 
 
