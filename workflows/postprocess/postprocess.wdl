@@ -27,13 +27,21 @@ workflow postprocess {
         String zones = "us-central1-c us-central1-f"
     }
 
+    String run_prefix = "~{dataset_id}.~{run_id}"
+
     scatter (parse_sample in parse_samples) {
+
+        # sample_prefix labels a parse sample, merge_key (dataset_id excluded for
+        # brevity) labels cells within a parse sample so they are unique upon merge
+        String sample_prefix = "~{run_prefix}.~{parse_sample.parse_sample_name}"
+        String merge_key = "~{run_id}.~{parse_sample.parse_sample_name}"
+
         call prep_parse_sample {
             input:
                 combined_sublibs_tar_gz = combined_sublibs_tar_gz,
+                output_prefix = sample_prefix,
                 dataset_id = dataset_id,
                 team_id = team_id,
-                run_id = run_id,
                 batch = batch,
                 sample_name = parse_sample.parse_sample_name,
                 donor_id_vireo_mapping = parse_sample.vireo_donor_ids,
@@ -47,8 +55,8 @@ workflow postprocess {
 
     call merge_and_plot_qc_metrics {
         input:
-            dataset_id = dataset_id,
-            run_id = run_id,
+            output_prefix = run_prefix,
+            merge_keys = merge_key,
             prepped_adata_objects = prep_parse_sample.prepped_adata,
             container_registry = container_registry,
             zones = zones
@@ -56,8 +64,7 @@ workflow postprocess {
 
     call filter {
         input:
-            dataset_id = dataset_id,
-            run_id = run_id,
+            output_prefix = run_prefix,
             merged_adata_object = merge_and_plot_qc_metrics.merged_adata_object,
             pct_counts_mt_max = pct_counts_mt_max,
             doublet_score_max = doublet_score_max,
@@ -102,10 +109,10 @@ workflow postprocess {
 
 task prep_parse_sample {
     input {
+        String output_prefix
         File combined_sublibs_tar_gz
         String dataset_id
         String team_id
-        String run_id
         String batch
         String sample_name
         File? donor_id_vireo_mapping
@@ -116,9 +123,8 @@ task prep_parse_sample {
         String zones
     }
 
-    String prefix = "~{dataset_id}.~{run_id}.~{sample_name}"
-    String donor_assignments = "~{prefix}.donor_assignments.csv"
-    String adata_out = "~{prefix}.prepped.h5ad"
+    String donor_assignments = "~{output_prefix}.donor_assignments.csv"
+    String adata_out = "~{output_prefix}.prepped.h5ad"
 
     Int threads = 4
     Int mem_gb = 16
@@ -148,7 +154,7 @@ task prep_parse_sample {
     >>>
 
     output {
-        File vireo_joined_cell_meta = donor_assignments
+        File donor_assignments_csv = donor_assignments
         File prepped_adata = adata_out
     }
 
@@ -158,6 +164,7 @@ task prep_parse_sample {
         cpuPlatform: "Intel Cascade Lake"
         memory: "~{mem_gb} GB"
         disks: "local-disk ~{disk_size} SSD"
+        bootDiskSizeGb: 40
         preemptible: 3
         zones: zones
     }
@@ -167,10 +174,10 @@ task prep_parse_sample {
     }
 
     parameter_meta {
+        output_prefix: {help: "Prefix for output files of the form <dataset_id>.<run_id>.<parse_sample>."}
         combined_sublibs_tar_gz: {help: "Tarball of the split-pipe comb output directory."}
         dataset_id: {help: "ASAP dataset identifier; used in output names and batch_id."}
         team_id: {help: "ASAP team identifier; used in batch_id."}
-        run_id: {help: "Parse run ID (e.g. PB-001); used in output names."}
         batch: {help: "SAMPLE.csv batch value for this Parse run (e.g. Batch1)."}
         sample_name: {help: "Parse sample name; must match a comb output subdirectory."}
         donor_id_vireo_mapping: {help: "Vireo donor assignment TSV for a pooled Parse sample. Mutually exclusive with subject_id."}
@@ -185,14 +192,12 @@ task prep_parse_sample {
 
 task merge_and_plot_qc_metrics {
     input {
-        String dataset_id
-        String run_id
+        String output_prefix
+        Array[String] merge_keys
         Array[File] prepped_adata_objects
         String container_registry
         String zones
     }
-
-    String prefix = "~{dataset_id}.~{run_id}"
 
     Int mem_gb = ceil(size(prepped_adata_objects, "GB") * 2.4 + 20)
     Int disk_size = ceil(size(prepped_adata_objects, "GB") * 3 + 50)
@@ -200,35 +205,30 @@ task merge_and_plot_qc_metrics {
     command <<<
         set -euo pipefail
 
-        while read -r adata_object || [[ -n "${adata_object}" ]]; do
-            adata_path=$(realpath "${adata_object}")
-            sample=$(basename "${adata_path}" ".prepped.h5ad")
-            sample="${sample#~{dataset_id}.}"
-            echo -e "${sample}\t${adata_path}" >> adata_samples_paths.tsv
-        done < ~{write_lines(prepped_adata_objects)}
+        paste ~{write_lines(merge_keys)} ~{write_lines(prepped_adata_objects)} > adata_samples_paths.tsv
 
         merge_and_plot_qc \
             --adata-objects-fofn adata_samples_paths.tsv \
-            --adata-output ~{prefix}.merged_unfiltered.h5ad \
-            --output-metadata-file ~{prefix}.initial_metadata.csv
+            --adata-output ~{output_prefix}.merged_unfiltered.h5ad \
+            --output-metadata-file ~{output_prefix}.initial_metadata.csv
 
-        mv "plots/violin_n_genes_by_counts.png" "plots/~{prefix}.n_genes_by_counts.violin.png"
-		mv "plots/violin_total_counts.png" "plots/~{prefix}.total_counts.violin.png"
-		mv "plots/violin_pct_counts_mt.png" "plots/~{prefix}.pct_counts_mt.violin.png"
-		mv "plots/violin_pct_counts_rb.png" "plots/~{prefix}.pct_counts_rb.violin.png"
-		mv "plots/violin_doublet_score.png" "plots/~{prefix}.doublet_score.violin.png"
-        
+        mv "plots/violin_n_genes_by_counts.png" "plots/~{output_prefix}.n_genes_by_counts.violin.png"
+        mv "plots/violin_total_counts.png" "plots/~{output_prefix}.total_counts.violin.png"
+        mv "plots/violin_pct_counts_mt.png" "plots/~{output_prefix}.pct_counts_mt.violin.png"
+        mv "plots/violin_pct_counts_rb.png" "plots/~{output_prefix}.pct_counts_rb.violin.png"
+        mv "plots/violin_doublet_score.png" "plots/~{output_prefix}.doublet_score.violin.png"
+
     >>>
 
     output {
-        File merged_adata_object = "~{prefix}.merged_unfiltered.h5ad"
-        File qc_initial_metadata_csv = "~{prefix}.initial_metadata.csv"
+        File merged_adata_object = "~{output_prefix}.merged_unfiltered.h5ad"
+        File qc_initial_metadata_csv = "~{output_prefix}.initial_metadata.csv"
         Array[File] qc_plots_png = [
-            "plots/~{prefix}.n_genes_by_counts.violin.png",
-            "plots/~{prefix}.total_counts.violin.png",
-            "plots/~{prefix}.pct_counts_mt.violin.png",
-            "plots/~{prefix}.pct_counts_rb.violin.png",
-            "plots/~{prefix}.doublet_score.violin.png"
+            "plots/~{output_prefix}.n_genes_by_counts.violin.png",
+            "plots/~{output_prefix}.total_counts.violin.png",
+            "plots/~{output_prefix}.pct_counts_mt.violin.png",
+            "plots/~{output_prefix}.pct_counts_rb.violin.png",
+            "plots/~{output_prefix}.doublet_score.violin.png"
         ]
     }
 
@@ -238,8 +238,8 @@ task merge_and_plot_qc_metrics {
         cpuPlatform: "Intel Cascade Lake"
         memory: "~{mem_gb} GB"
         disks: "local-disk ~{disk_size} SSD"
-        preemptible: 3
         bootDiskSizeGb: 40
+        preemptible: 3
         zones: zones
     }
 
@@ -248,8 +248,8 @@ task merge_and_plot_qc_metrics {
     }
 
     parameter_meta {
-        dataset_id: {help: "ASAP dataset identifier; used in output names and batch_id."}
-        run_id: {help: "Parse run ID (e.g. PB-001); used in output names."}
+        output_prefix: {help: "Prefix for output files of the form <dataset_id>.<run_id>."}
+        merge_keys: {help: "Concat key per AnnData object, in the same order as prepped_adata_objects (<run_id>.<parse_sample>); becomes the cell-ID suffix."}
         prepped_adata_objects: {help: "An array of Parse Sample-level AnnData objects to merge."}
         container_registry: {help: "Container registry where workflow Docker images are hosted."}
         zones: {help: "Space-delimited set of GCP zones to spin up compute in. ['us-central1-c us-central1-f']"}
@@ -259,8 +259,7 @@ task merge_and_plot_qc_metrics {
 
 task filter {
     input {
-        String dataset_id
-        String run_id
+        String output_prefix
         File merged_adata_object
 
         Int pct_counts_mt_max
@@ -274,8 +273,6 @@ task filter {
         String zones
     }
 
-    String prefix = "~{dataset_id}.~{run_id}"
-
     Int calc_mem_gb = ceil(size(merged_adata_object, "GB") * 18 + 20)
     Int mem_gb = if calc_mem_gb > 624 then 624 else calc_mem_gb
     Int disk_size = ceil(size(merged_adata_object, "GB") * 4 + 20)
@@ -285,25 +282,25 @@ task filter {
 
         drop_unassigned_cells.py \
             --adata-input ~{merged_adata_object} \
-            --adata-output ~{prefix}.assigned.h5ad \
-            --output-removed-cells-file ~{prefix}.unassigned_removed_cells.csv
+            --adata-output ~{output_prefix}.assigned.h5ad \
+            --output-removed-cells-file ~{output_prefix}.unassigned_removed_cells.csv
 
         filter \
-            --adata-input ~{prefix}.assigned.h5ad \
+            --adata-input ~{output_prefix}.assigned.h5ad \
             --pct-counts-mt-max ~{pct_counts_mt_max} \
             --doublet-score-max ~{doublet_score_max} \
             --total-counts-limits ~{sep=' ' total_counts_limits} \
             --n-genes-by-counts-limits ~{sep=' ' n_genes_by_counts_limits} \
             --n-mads-lower ~{n_mads_lower} \
             --n-mads-upper ~{n_mads_upper} \
-            --adata-output ~{prefix}.filtered.h5ad \
-            --output-removed-cells-file ~{prefix}.filtered_out_cells.csv
+            --adata-output ~{output_prefix}.filtered.h5ad \
+            --output-removed-cells-file ~{output_prefix}.filtered_out_cells.csv
     >>>
 
     output {
-        File filtered_adata_object = "~{prefix}.filtered.h5ad"
-        File unassigned_removed_cells_csv = "~{prefix}.unassigned_removed_cells.csv"
-        File filtered_out_cells_csv = "~{prefix}.filtered_out_cells.csv"
+        File filtered_adata_object = "~{output_prefix}.filtered.h5ad"
+        File unassigned_removed_cells_csv = "~{output_prefix}.unassigned_removed_cells.csv"
+        File filtered_out_cells_csv = "~{output_prefix}.filtered_out_cells.csv"
     }
 
     runtime {
@@ -322,8 +319,7 @@ task filter {
     }
 
     parameter_meta {
-        dataset_id: {help: "ASAP dataset identifier; used in output names and batch_id."}
-        run_id: {help: "Parse run ID (e.g. PB-001); used in output names."}
+        output_prefix: {help: "Prefix for output files of the form <dataset_id>.<run_id>."}
         merged_adata_object: {help: "Merged AnnData object."}
         pct_counts_mt_max: {help: "Maximum percentage of mitochondrial gene counts allowed per cell. [10]"}
         doublet_score_max: {help: "Maximum doublet detection score threshold. [0.2]"}
