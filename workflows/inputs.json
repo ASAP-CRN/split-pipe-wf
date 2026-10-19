@@ -1,6 +1,6 @@
 {
-    "split_pipe_entrypoint.dataset_id": "team-voet-pmdbs-sn-rnaseq-parsebio",
-    "split_pipe_entrypoint.sublibraries": [
+    "split_pipe.dataset_id": "team-voet-pmdbs-sn-rnaseq-parsebio",
+    "split_pipe.sublibraries": [
         {
             "sublibrary_id": "PB-001-a",
             "fastq_R1s": [
@@ -30,13 +30,13 @@
             ]
         }
     ],
-    "split_pipe_entrypoint.genome_name": "hg38",
-    "split_pipe_entrypoint.genome_ref_tar_gz": "gs://asap-workflow-dev/workflow-resources/hg38_reference_index.tar.gz",
-    "split_pipe_entrypoint.genome_fasta": "gs://asap-workflow-dev/workflow-resources/GRCh38.primary_assembly.genome.fa.gz",
-    "split_pipe_entrypoint.genes_gtf": "gs://asap-workflow-dev/workflow-resources/gencode.v46.annotation.gtf.gz",
-    "split_pipe_entrypoint.chemistry": "v1",
-    "split_pipe_entrypoint.kit": "WT",
-    "split_pipe_entrypoint.sample_list_tsv": "gs://asap-workflow-dev/split_pipe_dev/test_sample_list.tsv",
-    "split_pipe_entrypoint.container_registry": "us-central1-docker.pkg.dev/dnastack-asap-parkinsons/workflow-images",
-    "split_pipe_entrypoint.zones": "us-central1-c us-central1-f"
+    "split_pipe.genome_name": "hg38",
+    "split_pipe.genome_ref_tar_gz": "gs://asap-workflow-dev/workflow-resources/hg38_reference_index.tar.gz",
+    "split_pipe.genome_fasta": "gs://asap-workflow-dev/workflow-resources/GRCh38.primary_assembly.genome.fa.gz",
+    "split_pipe.genes_gtf": "gs://asap-workflow-dev/workflow-resources/gencode.v46.annotation.gtf.gz",
+    "split_pipe.chemistry": "v1",
+    "split_pipe.kit": "WT",
+    "split_pipe.sample_list_tsv": "gs://asap-workflow-dev/split_pipe_dev/test_sample_list.tsv",
+    "split_pipe.container_registry": "us-central1-docker.pkg.dev/dnastack-asap-parkinsons/workflow-images",
+    "split_pipe.zones": "us-central1-c us-central1-f"
 }

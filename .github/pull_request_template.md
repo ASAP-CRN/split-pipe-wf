@@ -10,7 +10,8 @@
 - [ ] Documentation
 
 ## Task Checklist
-- [ ] documentation updated
+- [ ] Documentation updated
+- [ ] Docker images pushed
 - [ ] `miniwdl check` passed
 - [ ] `womtool validate` passed
 - [ ] Human reviewed any code produced or modified by AI
@@ -25,5 +26,10 @@
 - [ ] GA4GH Workflow Execution Service, On Premises and Multi Cloud
 - [ ] Other
 
-### Successful Workflow IDs
-*
+## Successful workflow runs
+
+| Sample                                    | External workflow ID       | Workbench ID       | Engine |
+| :---------------------------------------- | :------------------------- | :----------------- | :----- |
+| _link to the inputs file for this sample_ | _Cromwell/GCP workflow run ID_ | _Workbench run ID_ | _Engine / workbench namespace this was run in_ |
+
+---
