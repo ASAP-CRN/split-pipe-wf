@@ -4,7 +4,7 @@ version 1.0
 
 import "../structs.wdl"
 
-workflow postprocess_entrypoint {
+workflow postprocess {
     input {
         File combined_sublibs_tar_gz
         String dataset_id

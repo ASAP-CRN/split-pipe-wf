@@ -4,8 +4,7 @@ version 1.0
 
 import "../structs.wdl"
 
-
-workflow split_pipe_wf {
+workflow split_pipe {
     input {
         String dataset_id
         Array[Sublibrary] sublibraries
