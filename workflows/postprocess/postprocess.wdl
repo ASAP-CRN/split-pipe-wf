@@ -211,17 +211,24 @@ task merge_and_plot_qc_metrics {
             --adata-objects-fofn adata_samples_paths.tsv \
             --adata-output ~{prefix}.merged_unfiltered.h5ad \
             --output-metadata-file ~{prefix}.initial_metadata.csv
+
+        mv "plots/violin_n_genes_by_counts.png" "plots/~{prefix}.n_genes_by_counts.violin.png"
+		mv "plots/violin_total_counts.png" "plots/~{prefix}.total_counts.violin.png"
+		mv "plots/violin_pct_counts_mt.png" "plots/~{prefix}.pct_counts_mt.violin.png"
+		mv "plots/violin_pct_counts_rb.png" "plots/~{prefix}.pct_counts_rb.violin.png"
+		mv "plots/violin_doublet_score.png" "plots/~{prefix}.doublet_score.violin.png"
+        
     >>>
 
     output {
         File merged_adata_object = "~{prefix}.merged_unfiltered.h5ad"
         File qc_initial_metadata_csv = "~{prefix}.initial_metadata.csv"
         Array[File] qc_plots_png = [
-            "plots/violin_n_genes_by_counts.png",
-            "plots/violin_total_counts.png",
-            "plots/violin_pct_counts_mt.png",
-            "plots/violin_pct_counts_rb.png",
-            "plots/violin_doublet_score.png"
+            "plots/~{prefix}.n_genes_by_counts.violin.png",
+            "plots/~{prefix}.total_counts.violin.png",
+            "plots/~{prefix}.pct_counts_mt.violin.png",
+            "plots/~{prefix}.pct_counts_rb.violin.png",
+            "plots/~{prefix}.doublet_score.violin.png"
         ]
     }
 
