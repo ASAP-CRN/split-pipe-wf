@@ -196,6 +196,16 @@ def join_asap_metadata(
     obs = obs.merge(lookup, on="subject_id", how="left", validate="many_to_one")
     obs.index = adata.obs.index  # merge drops the index; restore bc_wells
 
+    # A missing sample is only expected for vireo's own non-singlet calls; anything 
+    # else is a subject_id that does not match SAMPLE.csv for this batch
+    vireo_non_singlets = {"doublet", "unassigned"}
+    unmatched = obs["sample"].isna() & ~obs["subject_id"].isin(vireo_non_singlets)
+    if unmatched.any():
+        missing = sorted(obs.loc[unmatched, "subject_id"].astype(str).unique())
+        raise ValueError(
+            f"{unmatched.sum()} cells have a subject_id not found in SAMPLE.csv for batch {batch}: {missing}"
+        )
+    
     obs = obs.rename(columns={
         "ASAP_sample_id": "sample",
         "region_level_1": "brain_region_level_1",
@@ -213,8 +223,8 @@ def join_asap_metadata(
     obs["dataset"] = dataset
     obs["batch_id"] = f"{team}_{dataset}_{batch}"
 
-    n_unmatched = obs["sample"].isna().sum()
-    logging.info("Joined ASAP metadata; %d cells without a sample (vireo doublet/unassigned)", n_unmatched)
+    n_non_singlet = obs["subject_id"].isin(vireo_non_singlets).sum()
+    logging.info("Joined ASAP metadata; %d cells without a sample (vireo doublet/unassigned)", n_non_singlet)
 
     adata.obs = obs
 
