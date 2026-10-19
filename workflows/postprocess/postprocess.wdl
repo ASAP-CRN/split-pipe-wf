@@ -128,13 +128,14 @@ task prep_parse_sample {
 
     Int threads = 4
     Int mem_gb = 16
-    Int disk_size = ceil((size(combined_sublibs_tar_gz, "GB") * 3) + 20)
+    Int disk_size = ceil(size(combined_sublibs_tar_gz, "GB") + 20)
 
     command <<<
         set -euo pipefail
 
-        tar -xzf ~{combined_sublibs_tar_gz}
+        # Only need the filtered DGE output for this Parse sample
         dge_dir="combined_sublibs/~{sample_name}/DGE_filtered"
+        tar -xzf ~{combined_sublibs_tar_gz} "${dge_dir}"
 
         assign_donors.py \
             --cell-meta "${dge_dir}/cell_metadata.csv" \
