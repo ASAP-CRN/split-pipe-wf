@@ -23,6 +23,11 @@ workflow postprocess {
         Float n_mads_lower
         Float n_mads_upper
 
+        # Allen Institute's Map My Cells
+        String mmc_taxonomy
+        File allen_brain_mmc_precomputed_stats_h5
+        File? allen_brain_mmc_marker_genes_json
+
         String container_registry
         String zones = "us-central1-c us-central1-f"
     }
@@ -76,6 +81,17 @@ workflow postprocess {
             zones = zones
     }
 
+    call map_cell_types {
+        input:
+            output_prefix = run_prefix,
+            filtered_adata_object = filter.filtered_adata_object,
+            mmc_taxonomy = mmc_taxonomy,
+            allen_brain_mmc_precomputed_stats_h5 = allen_brain_mmc_precomputed_stats_h5,
+            allen_brain_mmc_marker_genes_json = allen_brain_mmc_marker_genes_json,
+            container_registry = container_registry,
+            zones = zones
+    }
+
     output {
         Array[File] prepped_adata = prep_parse_sample.prepped_adata
         File merged_adata = merge_and_plot_qc_metrics.merged_adata_object
@@ -84,6 +100,9 @@ workflow postprocess {
         File filtered_adata_object = filter.filtered_adata_object
         File unassigned_removed_cells_csv = filter.unassigned_removed_cells_csv
         File filtered_out_cells_csv = filter.filtered_out_cells_csv
+        File mmc_extended_results_json = map_cell_types.mmc_extended_results_json
+        File mmc_results_csv = map_cell_types.mmc_results_csv
+        File mmc_log_txt = map_cell_types.mmc_log_txt
     }
 
     parameter_meta {
@@ -101,6 +120,9 @@ workflow postprocess {
         n_genes_by_counts_limits: {help: "Absolute minimum and maximum number of genes detected per cell, applied on top of the MAD-based thresholds. [300, 15000]"}
         n_mads_lower: {help: "Number of MADs below the per-sample median allowed for total counts and genes detected. [3]"}
         n_mads_upper: {help: "Number of MADs above the per-sample median allowed for total counts and genes detected. [5]"}
+        mmc_taxonomy: {help: "Cell type taxonomy of the precomputed stats reference; appended to MMC output filenames. Must match allen_brain_mmc_precomputed_stats_h5."}
+        allen_brain_mmc_precomputed_stats_h5: {help: "A precomputed statistics file from the Allen Brain Cell Atlas containing reference statistics (the average gene expression profile per cell type cluster and cell type taxonomy)."}
+        allen_brain_mmc_marker_genes_json: {help: "Optional marker gene lookup (parent node -> marker genes), e.g. extracted from a previous run's extended_results.json. If provided, skips on-the-fly marker computation."}
         container_registry: {help: "Container registry where workflow Docker images are hosted."}
         zones: {help: "Space-delimited set of GCP zones to spin up compute in. ['us-central1-c us-central1-f']"}
     }
@@ -328,6 +350,73 @@ task filter {
         n_genes_by_counts_limits: {help: "Absolute minimum and maximum number of genes detected per cell (genes with at least one count); applied on top of the MAD-based thresholds. [300, 15000]"}
         n_mads_lower: {help: "Number of median absolute deviations below the per-sample median allowed for total UMI counts and number of genes detected per cell. [3]"}
         n_mads_upper: {help: "Number of median absolute deviations above the per-sample median allowed for total UMI counts and number of genes detected per cell. [5]"}
+        container_registry: {help: "Container registry where workflow Docker images are hosted."}
+        zones: {help: "Space-delimited set of GCP zones to spin up compute in. ['us-central1-c us-central1-f']"}
+    }
+}
+
+
+task map_cell_types {
+    input {
+        String output_prefix
+        File filtered_adata_object
+
+        String mmc_taxonomy
+        File allen_brain_mmc_precomputed_stats_h5
+        File? allen_brain_mmc_marker_genes_json
+
+        String container_registry
+        String zones
+    }
+
+    String mmc_mapping_mode = if defined(allen_brain_mmc_marker_genes_json) then "mmc_markers_mapping" else "mmc_otf_mapping"
+    String mmc_output_prefix = "~{output_prefix}.~{mmc_mapping_mode}.~{mmc_taxonomy}"
+
+    Int threads = 16
+    Int calc_mem_gb = ceil(size([filtered_adata_object, allen_brain_mmc_precomputed_stats_h5], "GB") * 8 + 100)
+    Int mem_gb = if calc_mem_gb > 624 then 624 else calc_mem_gb
+    # MMC's find_markers_for_all_taxonomy_pairs writes unthinned marker scratch to the working disk
+    # That scratch scales with the reference taxonomy rather than with the inputs, so it needs a floor of its own
+    Int disk_size = ceil(size([filtered_adata_object, allen_brain_mmc_precomputed_stats_h5], "GB") * 4 + 250)
+
+    command <<<
+        set -euo pipefail
+
+        mmc \
+            --adata-input ~{filtered_adata_object} \
+            --mmc-precomputed-stats ~{allen_brain_mmc_precomputed_stats_h5} \
+            --n-processors ~{if defined(allen_brain_mmc_marker_genes_json) then 4 else threads} \
+            --output-prefix ~{mmc_output_prefix} \
+            ~{if defined(allen_brain_mmc_marker_genes_json) then "--mmc-marker-genes " + allen_brain_mmc_marker_genes_json else ""}
+    >>>
+
+    output {
+        File mmc_extended_results_json = "~{mmc_output_prefix}.extended_results.json"
+        File mmc_results_csv = "~{mmc_output_prefix}.results.csv"
+        File mmc_log_txt = "~{mmc_output_prefix}.log.txt"
+    }
+
+    runtime {
+        docker: "~{container_registry}/parsebio_tools:0.1.0"
+        cpu: threads
+        cpuPlatform: "Intel Cascade Lake"
+        memory: "~{mem_gb} GB"
+        disks: "local-disk ~{disk_size} SSD"
+        preemptible: 0  # TODO: update to 3 after cached
+        bootDiskSizeGb: 40
+        zones: zones
+    }
+
+    meta {
+        description: "Assigns cell type labels with the Allen Brain Cell Atlas MapMyCells (MMC) tool, using on-the-fly markers by default or a precomputed marker lookup if provided. Writes the per-cell results CSV, the extended results JSON (including the marker genes used) and the log."
+    }
+
+    parameter_meta {
+        output_prefix: {help: "Prefix for output files of the form <dataset_id>.<run_id>."}
+        filtered_adata_object: {help: "QC-filtered AnnData object."}
+        mmc_taxonomy: {help: "Cell type taxonomy of the precomputed stats reference; appended to MMC output filenames. Must match allen_brain_mmc_precomputed_stats_h5."}
+        allen_brain_mmc_precomputed_stats_h5: {help: "A precomputed statistics file from the Allen Brain Cell Atlas containing reference statistics (the average gene expression profile per cell type cluster and cell type taxonomy)."}
+        allen_brain_mmc_marker_genes_json: {help: "Optional marker gene lookup (parent node -> marker genes), e.g. extracted from a previous run's extended_results.json. If provided, skips on-the-fly marker computation."}
         container_registry: {help: "Container registry where workflow Docker images are hosted."}
         zones: {help: "Space-delimited set of GCP zones to spin up compute in. ['us-central1-c us-central1-f']"}
     }
