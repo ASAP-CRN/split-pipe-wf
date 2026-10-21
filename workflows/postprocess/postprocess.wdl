@@ -92,6 +92,15 @@ workflow postprocess {
             zones = zones
     }
 
+    call add_mapped_cell_types {
+        input:
+            output_prefix = run_prefix,
+            filtered_adata_object = filter.filtered_adata_object,
+            mmc_results_csv = map_cell_types.mmc_results_csv,
+            container_registry = container_registry,
+            zones = zones
+    }
+
     output {
         Array[File] prepped_adata = prep_parse_sample.prepped_adata
         File merged_adata = merge_and_plot_qc_metrics.merged_adata_object
@@ -103,6 +112,8 @@ workflow postprocess {
         File mmc_extended_results_json = map_cell_types.mmc_extended_results_json
         File mmc_results_csv = map_cell_types.mmc_results_csv
         File mmc_log_txt = map_cell_types.mmc_log_txt
+        File mmc_adata_object = add_mapped_cell_types.mmc_adata_object
+        File mmc_results_parquet = add_mapped_cell_types.mmc_results_parquet
     }
 
     parameter_meta {
@@ -417,6 +428,62 @@ task map_cell_types {
         mmc_taxonomy: {help: "Cell type taxonomy of the precomputed stats reference; appended to MMC output filenames. Must match allen_brain_mmc_precomputed_stats_h5."}
         allen_brain_mmc_precomputed_stats_h5: {help: "A precomputed statistics file from the Allen Brain Cell Atlas containing reference statistics (the average gene expression profile per cell type cluster and cell type taxonomy)."}
         allen_brain_mmc_marker_genes_json: {help: "Optional marker gene lookup (parent node -> marker genes), e.g. extracted from a previous run's extended_results.json. If provided, skips on-the-fly marker computation."}
+        container_registry: {help: "Container registry where workflow Docker images are hosted."}
+        zones: {help: "Space-delimited set of GCP zones to spin up compute in. ['us-central1-c us-central1-f']"}
+    }
+}
+
+
+task add_mapped_cell_types {
+    input {
+        String output_prefix
+        File filtered_adata_object
+        File mmc_results_csv
+
+        String container_registry
+        String zones
+    }
+
+    Int calc_mem_gb = ceil(size(filtered_adata_object, "GB") * 18 + 20)
+    Int mem_gb = if calc_mem_gb > 624 then 624 else calc_mem_gb
+    Int disk_size = ceil(size(filtered_adata_object, "GB") * 4 + 20)
+
+    command <<<
+        set -euo pipefail
+
+        transcriptional_phenotype \
+            --adata-input ~{filtered_adata_object} \
+            # TODO: this is hard-coded for parity, consider if it should be a parameter
+            --workflow-name "pmdbs_sc_rnaseq" \
+            --mmc-results ~{mmc_results_csv} \
+            --adata-output ~{output_prefix}.mmc.h5ad \
+            --output-cell-types-file ~{output_prefix}.mmc_results.parquet
+    >>>
+
+    output {
+        File mmc_adata_object = "~{output_prefix}.mmc.h5ad"
+        String mmc_results_parquet = "~{output_prefix}.mmc_results.parquet"
+    }
+
+    runtime {
+        docker: "~{container_registry}/parsebio_tools:0.1.0"
+        cpu: 4
+        cpuPlatform: "Intel Cascade Lake"
+        memory: "~{mem_gb} GB"
+        disks: "local-disk ~{disk_size} SSD"
+        preemptible: 3
+        bootDiskSizeGb: 40
+        zones: zones
+    }
+
+    meta {
+        description: "Joins MMC cell type mapping results onto the filtered AnnData object and exports a Parquet summary of per-cell type assignments."
+    }
+
+    parameter_meta {
+        output_prefix: {help: "Prefix for output files of the form <dataset_id>.<run_id>."}
+        filtered_adata_object: {help: "QC-filtered AnnData object."}
+        mmc_results_csv: {help: "Cell type mapping results CSV produced by map_cell_types."}
         container_registry: {help: "Container registry where workflow Docker images are hosted."}
         zones: {help: "Space-delimited set of GCP zones to spin up compute in. ['us-central1-c us-central1-f']"}
     }
