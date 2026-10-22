@@ -170,12 +170,14 @@ task prep_parse_sample {
         dge_dir="combined_sublibs/~{sample_name}/DGE_filtered"
         tar -xzf ~{combined_sublibs_tar_gz} "${dge_dir}"
 
+        /usr/bin/time -v \
         assign_donors.py \
             --cell-meta "${dge_dir}/cell_metadata.csv" \
             ~{"--vireo " + donor_id_vireo_mapping} \
             ~{"--subject-id " + subject_id} \
             --output ~{donor_assignments}
 
+        /usr/bin/time -v \
         prep_parse_sample.py \
             --data-dir "${dge_dir}" \
             --donor-assignments ~{donor_assignments} \
@@ -195,7 +197,6 @@ task prep_parse_sample {
     runtime {
         docker: "~{container_registry}/parsebio_tools:0.1.0"
         cpu: threads
-        cpuPlatform: "Intel Cascade Lake"
         memory: "~{mem_gb} GB"
         disks: "local-disk ~{disk_size} SSD"
         bootDiskSizeGb: 40
@@ -241,6 +242,7 @@ task merge_and_plot_qc_metrics {
 
         paste ~{write_lines(merge_keys)} ~{write_lines(prepped_adata_objects)} > adata_samples_paths.tsv
 
+        /usr/bin/time -v \
         merge_and_plot_qc \
             --adata-objects-fofn adata_samples_paths.tsv \
             --adata-output ~{output_prefix}.merged_unfiltered.h5ad \
@@ -269,7 +271,6 @@ task merge_and_plot_qc_metrics {
     runtime {
         docker: "~{container_registry}/parsebio_tools:0.1.0"
         cpu: 4
-        cpuPlatform: "Intel Cascade Lake"
         memory: "~{mem_gb} GB"
         disks: "local-disk ~{disk_size} SSD"
         bootDiskSizeGb: 40
@@ -314,11 +315,13 @@ task filter {
     command <<<
         set -euo pipefail
 
+        /usr/bin/time -v \
         drop_unassigned_cells.py \
             --adata-input ~{merged_adata_object} \
             --adata-output ~{output_prefix}.assigned.h5ad \
             --output-removed-cells-file ~{output_prefix}.unassigned_removed_cells.csv
 
+        /usr/bin/time -v \
         filter \
             --adata-input ~{output_prefix}.assigned.h5ad \
             --pct-counts-mt-max ~{pct_counts_mt_max} \
@@ -340,7 +343,6 @@ task filter {
     runtime {
         docker: "~{container_registry}/parsebio_tools:0.1.0"
         cpu: 4
-        cpuPlatform: "Intel Cascade Lake"
         memory: "~{mem_gb} GB"
         disks: "local-disk ~{disk_size} SSD"
         preemptible: 3
@@ -383,20 +385,30 @@ task map_cell_types {
     String mmc_mapping_mode = if defined(allen_brain_mmc_marker_genes_json) then "mmc_markers_mapping" else "mmc_otf_mapping"
     String mmc_output_prefix = "~{output_prefix}.~{mmc_mapping_mode}.~{mmc_taxonomy}"
 
-    Int threads = 16
-    Int calc_mem_gb = ceil(size([filtered_adata_object, allen_brain_mmc_precomputed_stats_h5], "GB") * 8 + 100)
+    # Marker lookup mode skips reference marker generation (the expensive bit). 
+    # If not provided, on-the-fly marker generation will be used, which also
+    # requires more scratch storage that scales with size of the reference taxonomy.
+    Boolean use_marker_lookup = defined(allen_brain_mmc_marker_genes_json)
+    
+    Int threads = if use_marker_lookup then 4 else 16
+    
+    Int calc_mem_gb = if use_marker_lookup
+        then ceil(size([filtered_adata_object, allen_brain_mmc_precomputed_stats_h5], "GB") * 3 + 16)
+        else ceil(size([filtered_adata_object, allen_brain_mmc_precomputed_stats_h5], "GB") * 8 + 100)
     Int mem_gb = if calc_mem_gb > 624 then 624 else calc_mem_gb
-    # MMC's find_markers_for_all_taxonomy_pairs writes unthinned marker scratch to the working disk
-    # That scratch scales with the reference taxonomy rather than with the inputs, so it needs a floor of its own
-    Int disk_size = ceil(size([filtered_adata_object, allen_brain_mmc_precomputed_stats_h5], "GB") * 4 + 250)
+
+    Int disk_size = if use_marker_lookup
+        then ceil(size([filtered_adata_object, allen_brain_mmc_precomputed_stats_h5], "GB") * 3 + 20)
+        else ceil(size([filtered_adata_object, allen_brain_mmc_precomputed_stats_h5], "GB") * 4 + 250)
 
     command <<<
         set -euo pipefail
 
+        /usr/bin/time -v \
         mmc \
             --adata-input ~{filtered_adata_object} \
             --mmc-precomputed-stats ~{allen_brain_mmc_precomputed_stats_h5} \
-            --n-processors ~{if defined(allen_brain_mmc_marker_genes_json) then 4 else threads} \
+            --n-processors ~{threads} \
             --output-prefix ~{mmc_output_prefix} \
             ~{if defined(allen_brain_mmc_marker_genes_json) then "--mmc-marker-genes " + allen_brain_mmc_marker_genes_json else ""}
     >>>
@@ -410,7 +422,6 @@ task map_cell_types {
     runtime {
         docker: "~{container_registry}/parsebio_tools:0.1.0"
         cpu: threads
-        cpuPlatform: "Intel Cascade Lake"
         memory: "~{mem_gb} GB"
         disks: "local-disk ~{disk_size} SSD"
         preemptible: 0  # TODO: update to 3 after cached
@@ -456,6 +467,7 @@ task add_mapped_cell_types {
     command <<<
         set -euo pipefail
 
+        /usr/bin/time -v \
         transcriptional_phenotype \
             --adata-input ~{filtered_adata_object} \
             --workflow-name ~{sc_tools_workflow_name} \
@@ -472,7 +484,6 @@ task add_mapped_cell_types {
     runtime {
         docker: "~{container_registry}/parsebio_tools:0.1.0"
         cpu: 4
-        cpuPlatform: "Intel Cascade Lake"
         memory: "~{mem_gb} GB"
         disks: "local-disk ~{disk_size} SSD"
         preemptible: 3
