@@ -444,6 +444,11 @@ task add_mapped_cell_types {
         String zones
     }
 
+    # transcriptional_phenotype get its labelling logic from sc-rnaseq-wf's workflow name.
+    # "pmdbs_sc_rnaseq" selects the human branch, currently the only supported in this workflow.
+    String sc_tools_workflow_name = "pmdbs_sc_rnaseq"
+
+    # TODO: revisit, seems generous
     Int calc_mem_gb = ceil(size(filtered_adata_object, "GB") * 18 + 20)
     Int mem_gb = if calc_mem_gb > 624 then 624 else calc_mem_gb
     Int disk_size = ceil(size(filtered_adata_object, "GB") * 4 + 20)
@@ -453,8 +458,7 @@ task add_mapped_cell_types {
 
         transcriptional_phenotype \
             --adata-input ~{filtered_adata_object} \
-            # TODO: this is hard-coded for parity, consider if it should be a parameter
-            --workflow-name "pmdbs_sc_rnaseq" \
+            --workflow-name ~{sc_tools_workflow_name} \
             --mmc-results ~{mmc_results_csv} \
             --adata-output ~{output_prefix}.mmc.h5ad \
             --output-cell-types-file ~{output_prefix}.mmc_results.parquet
@@ -462,7 +466,7 @@ task add_mapped_cell_types {
 
     output {
         File mmc_adata_object = "~{output_prefix}.mmc.h5ad"
-        String mmc_results_parquet = "~{output_prefix}.mmc_results.parquet"
+        File mmc_results_parquet = "~{output_prefix}.mmc_results.parquet"
     }
 
     runtime {
