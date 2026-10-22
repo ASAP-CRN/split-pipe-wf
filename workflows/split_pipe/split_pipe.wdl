@@ -43,7 +43,7 @@ workflow split_pipe {
     scatter (sublibrary in sublibraries) {
         String sublibrary_id = sublibrary.sublibrary_id  # Declare as gathered for array input for combine_sublibraries
         
-        call split_pipe {
+        call split_pipe_sublibrary {
             input:
                 genome_ref_tar_gz = genome_ref_final,
                 dataset_id = dataset_id,
@@ -65,7 +65,7 @@ workflow split_pipe {
     call combine_sublibraries {
         input:
             genome_ref_tar_gz = genome_ref_final,
-            sublibrary_tars = split_pipe.sublibrary_tar_gz,  # Gathered Array[File] from the split-pipe scatter
+            sublibrary_tars = split_pipe_sublibrary.sublibrary_tar_gz,  # Gathered Array[File] from the split-pipe scatter
             dataset_id = dataset_id,
             sublibrary_ids = sublibrary_ids,
             container_registry = container_registry,
@@ -85,6 +85,7 @@ workflow split_pipe {
         dataset_id: {help: "The unique identifier for the dataset."}
         sublibraries: {help: "Array of sublibrary structs containing sublibrary IDs and FASTQ file paths."}
         genome_name: {help: "The name of which reference genome is used. Either 'hg38' (human) or 'mm10' (mouse)."}
+        genome_ref_tar_gz: {help: "Optional prebuilt split-pipe mkref index (tar.gz). If omitted, one is built from genome_fasta and genes_gtf."}
         genome_fasta: {help: "Path to the reference genome FASTA file."}
         genes_gtf: {help: "Path to the reference gene annotation GTF file."}
         chemistry: {help: "Chemistry used in the experiment."}
@@ -106,9 +107,12 @@ task make_reference {
         String zones
     }
 
+    String annotation_label = basename(genes_gtf, ".genes.gtf.gz")
+    String genome_ref_final = "split_pipe_1.8.2.~{genome_name}.~{annotation_label}.genome_ref.tar.gz"
+
     Int threads = 16
     Int mem_gb = 48
-    Int disk_size = 400  # 50->400 to test if increased throughput reduces time
+    Int disk_size = 400
 
     command <<<
         set -euo pipefail
@@ -123,12 +127,11 @@ task make_reference {
             --output_dir genome_ref \
             --nthreads ~{threads}
 
-        tar -czf genome_ref.tar.gz genome_ref
+        tar -czf "~{genome_ref_final}" genome_ref
     >>>
 
     output {
-        File genome_ref_tar_gz = "genome_ref.tar.gz"
-
+        File genome_ref_tar_gz = genome_ref_final
     }
 
     runtime {
@@ -136,7 +139,7 @@ task make_reference {
         cpu: threads
         cpuPlatform: "Intel Cascade Lake"
         memory: "~{mem_gb} GB"
-        disks: "local-disk ~{disk_size} HDD"
+        disks: "local-disk ~{disk_size} SSD"
         preemptible: 3
         zones: zones
     }
@@ -154,7 +157,7 @@ task make_reference {
 }
 
 
-task split_pipe {
+task split_pipe_sublibrary {
     input {
         File genome_ref_tar_gz
         String dataset_id
@@ -192,7 +195,6 @@ task split_pipe {
             --samp_list ~{sample_list_tsv} \
             --nthreads ~{threads} \
             --no_keep_going \
-            --save_anndata \
             ~{if defined(parameter_file) then "--parfile " + select_first([parameter_file]) else ""}
 
         # TODO: update check when output fully declared
@@ -213,7 +215,7 @@ task split_pipe {
         cpu: threads
         cpuPlatform: "Intel Cascade Lake"
         memory: "~{mem_gb} GB"
-        disks: "local-disk ~{disk_size} HDD"
+        disks: "local-disk ~{disk_size} SSD"
         zones: zones
     }
 
@@ -285,7 +287,7 @@ task combine_sublibraries {
         cpu: threads
         cpuPlatform: "Intel Cascade Lake"
         memory: "~{mem_gb} GB"
-        disks: "local-disk ~{disk_size} HDD"
+        disks: "local-disk ~{disk_size} SSD"
         preemptible: 3
         zones: zones
     }
