@@ -85,7 +85,6 @@ def add_qc_metrics(adata: AnnData) -> AnnData:
     called cells, including vireo doublet/unassigned, with default parameters;
     predicted_doublet is dropped in favour of doublet_score.
     """
-
     adata.var["mt"] = adata.var_names.str.contains(r"^MT-", case=False, regex=True)
     if not adata.var["mt"].any():
         logging.warning("No mitochondrial genes found using case-insensitive MT- prefix")
@@ -233,6 +232,8 @@ def main(args: argparse.Namespace):
     adata = add_qc_metrics(adata)
     sample_df = pd.read_csv(args.sample_path)
     subject_df = pd.read_csv(args.subject_path)
+    sample_map = pd.read_csv(args.sample_map) if args.sample_map else None
+    parse_sample = str(adata.obs["parse_sample"].iloc[0])
 
     adata = join_asap_metadata(
         adata,
@@ -241,10 +242,8 @@ def main(args: argparse.Namespace):
         batch=args.batch,
         team=args.team,
         dataset=args.dataset,
-        # TODO(PB-002): pass a sample map for runs where a subject has multiple ASAP
-        # samples; without one, build_sample_lookup raises an error naming them
-        sample_map=None,
-        parse_sample=None,
+        sample_map=sample_map,
+        parse_sample=parse_sample,
     )
 
     adata.write_h5ad(filename=args.output, compression="lzf")
@@ -302,6 +301,12 @@ if __name__ == "__main__":
         "--dataset",
         required=True,
         help="Dataset identifier (e.g. team-voet-pmdbs-sn-rnaseq-parsebio)"
+    )
+    parser.add_argument(
+        "--sample-map",
+        type=Path,
+        help="CSV of parse_sample, subject_id, sample_id; required when a subject has "
+             "more than one sample in the batch (e.g. PB-002)"
     )
 
     args = parser.parse_args()
