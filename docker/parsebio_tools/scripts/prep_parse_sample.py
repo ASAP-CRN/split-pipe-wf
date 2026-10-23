@@ -27,11 +27,9 @@ def create_adata_object(data_path: Path) -> AnnData:
     Load the split-pipe matrix, gene annotations, and cell metadata into AnnData.
 
     Expects count_matrix.mtx (cells x genes), all_genes.csv, and cell_metadata.csv in
-    data_path. Gene symbols (made unique) are the var index, with unversioned Ensembl IDs
-    in var["gene_id"] and the original GENCODE IDs in var["gene_id_versioned"]. bc_wells
-    is the obs index.
+    data_path. Gene symbols (made unique) are the var index, with Ensembl IDs in
+    var["gene_id"]. bc_wells is the obs index.
     """
-
     mtx_path = data_path / "count_matrix.mtx"
     gene_path = data_path / "all_genes.csv"
     cell_meta_path = data_path / "cell_metadata.csv"
@@ -50,9 +48,6 @@ def create_adata_object(data_path: Path) -> AnnData:
     adata.var = gene_data.set_index("gene_name", drop=False)
     adata.var_names_make_unique()
     adata.var.index.name = "gene_symbol_unique"
-    # Unversioned Ensembl IDs to match Cell Ranger references (ENSG00000000003.16 -> ENSG00000000003)
-    adata.var["gene_id_versioned"] = adata.var["gene_id"]
-    adata.var["gene_id"] = adata.var["gene_id"].str.replace(r"\.\d+$", "", regex=True)
 
     adata.obs = cell_meta_df.set_index("bc_wells", drop=False)
 
