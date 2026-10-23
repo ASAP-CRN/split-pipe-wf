@@ -71,6 +71,15 @@ def assign_subjects(
         # Check the proportion of missing subject IDs and set NAs to "unassigned"
         check_missing_subject_ids(join_df)
         join_df["subject_id"] = join_df["subject_id"].fillna("unassigned")
+        
+        # vireo labels donors it could not match to a genotype as donor<N>; no subject to join
+        unmatched_donor = join_df["subject_id"].str.fullmatch(r"donor\d+")
+        if unmatched_donor.any():
+            logging.warning(
+                "%d cells assigned to vireo donors with no genotype match %s; setting to unassigned",
+                unmatched_donor.sum(), sorted(join_df.loc[unmatched_donor, "subject_id"].unique()),
+            )
+            join_df.loc[unmatched_donor, "subject_id"] = "unassigned"
 
     else:
         join_df = cell_meta.copy()
