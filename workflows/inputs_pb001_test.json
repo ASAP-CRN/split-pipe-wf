@@ -36,7 +36,7 @@
     "split_pipe.genes_gtf": "gs://asap-workflow-dev/split_pipe_dev/refdata-gex-GRCh38-2024-A.genes.gtf.gz",
     "split_pipe.chemistry": "v1",
     "split_pipe.kit": "WT",
-    "split_pipe.sample_list_tsv": "gs://asap-workflow-dev/split_pipe_dev/test_sample_list.tsv",
+    "split_pipe.sample_list_tsv": "gs://asap-workflow-dev/split_pipe_dev/PB-001_sample_list.tsv",
     "split_pipe.container_registry": "us-central1-docker.pkg.dev/dnastack-asap-parkinsons/workflow-images",
     "split_pipe.zones": "us-central1-c us-central1-f"
 }
