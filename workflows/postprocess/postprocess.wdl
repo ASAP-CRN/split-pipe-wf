@@ -14,6 +14,7 @@ workflow postprocess {
         Array[ParseSample] parse_samples
         File sample_csv
         File subject_csv
+        File? sample_map
 
         # Filtering parameters
         Int pct_counts_mt_max
@@ -53,6 +54,7 @@ workflow postprocess {
                 subject_id = parse_sample.subject_id,
                 sample_csv = sample_csv,
                 subject_csv = subject_csv,
+                sample_map = sample_map,
                 container_registry = container_registry,
                 zones = zones
         }
@@ -125,6 +127,7 @@ workflow postprocess {
         parse_samples: {help: "Parse samples to process; each has a vireo donor table (pooled) or a single subject_id (un-pooled)."}
         sample_csv: {help: "ASAP SAMPLE.csv."}
         subject_csv: {help: "ASAP SUBJECT.csv."}
+        sample_map: {help: "CSV of parse_sample, subject_id, sample_id; needed when a subject has more than one sample in the batch."}
         pct_counts_mt_max: {help: "Maximum percentage of mitochondrial gene counts allowed per cell. [10]"}
         doublet_score_max: {help: "Maximum doublet detection score threshold. [0.2]"}
         total_counts_limits: {help: "Absolute minimum and maximum total UMI counts per cell, applied on top of the MAD-based thresholds. [500, 150000]"}
@@ -152,6 +155,7 @@ task prep_parse_sample {
         String? subject_id
         File sample_csv
         File subject_csv
+        File? sample_map
         String container_registry
         String zones
     }
@@ -186,6 +190,7 @@ task prep_parse_sample {
             --batch ~{batch} \
             --team ~{team_id} \
             --dataset ~{dataset_id} \
+            ~{"--sample-map " + sample_map} \
             --output ~{adata_out}
     >>>
 
@@ -195,7 +200,7 @@ task prep_parse_sample {
     }
 
     runtime {
-        docker: "~{container_registry}/parsebio_tools:0.1.0"
+        docker: "~{container_registry}/parsebio_tools:0.1.1"
         cpu: threads
         memory: "~{mem_gb} GB"
         disks: "local-disk ~{disk_size} SSD"
@@ -219,6 +224,7 @@ task prep_parse_sample {
         subject_id: {help: "Single known donor for an un-pooled Parse sample. Mutually exclusive with donor_id_vireo_mapping."}
         sample_csv: {help: "ASAP SAMPLE.csv."}
         subject_csv: {help: "ASAP SUBJECT.csv."}
+        sample_map: {help: "CSV of parse_sample, subject_id, sample_id; needed when a subject has more than one sample in the batch."}
         container_registry: {help: "Container registry where workflow Docker images are hosted."}
         zones: {help: "Space-delimited set of GCP zones to spin up compute in. ['us-central1-c us-central1-f']"}
     }
@@ -269,7 +275,7 @@ task merge_and_plot_qc_metrics {
     }
 
     runtime {
-        docker: "~{container_registry}/parsebio_tools:0.1.0"
+        docker: "~{container_registry}/parsebio_tools:0.1.1"
         cpu: 4
         memory: "~{mem_gb} GB"
         disks: "local-disk ~{disk_size} SSD"
@@ -341,7 +347,7 @@ task filter {
     }
 
     runtime {
-        docker: "~{container_registry}/parsebio_tools:0.1.0"
+        docker: "~{container_registry}/parsebio_tools:0.1.1"
         cpu: 4
         memory: "~{mem_gb} GB"
         disks: "local-disk ~{disk_size} SSD"
@@ -420,7 +426,7 @@ task map_cell_types {
     }
 
     runtime {
-        docker: "~{container_registry}/parsebio_tools:0.1.0"
+        docker: "~{container_registry}/parsebio_tools:0.1.1"
         cpu: threads
         memory: "~{mem_gb} GB"
         disks: "local-disk ~{disk_size} SSD"
@@ -482,7 +488,7 @@ task add_mapped_cell_types {
     }
 
     runtime {
-        docker: "~{container_registry}/parsebio_tools:0.1.0"
+        docker: "~{container_registry}/parsebio_tools:0.1.1"
         cpu: 4
         memory: "~{mem_gb} GB"
         disks: "local-disk ~{disk_size} SSD"
