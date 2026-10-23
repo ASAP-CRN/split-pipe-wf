@@ -137,7 +137,6 @@ task make_reference {
     runtime {
         docker: "~{container_registry}/split_pipe:1.8.2"
         cpu: threads
-        cpuPlatform: "Intel Cascade Lake"
         memory: "~{mem_gb} GB"
         disks: "local-disk ~{disk_size} SSD"
         preemptible: 3
@@ -173,8 +172,8 @@ task split_pipe_sublibrary {
     }
 
     Int threads = 16
-    Int mem_gb = 48  # TODO: Revisit, PB docs bin at 64/128/256 GB
-    Int disk_size = ceil((size(genome_ref_tar_gz, "GB") + (size(flatten([fastq_R1s, fastq_R2s]), "GB")) * 8) + 50 )
+    Int mem_gb = 32  # TODO: Revisit, PB docs bin at 64/128/256 GB
+    Int disk_size = ceil((size(genome_ref_tar_gz, "GB") + (size(flatten([fastq_R1s, fastq_R2s]), "GB")) * 5) + 50 )
 
     command <<<
         set -euo pipefail
@@ -213,7 +212,6 @@ task split_pipe_sublibrary {
     runtime {
         docker: "~{container_registry}/split_pipe:1.8.2"
         cpu: threads
-        cpuPlatform: "Intel Cascade Lake"
         memory: "~{mem_gb} GB"
         disks: "local-disk ~{disk_size} SSD"
         zones: zones
@@ -285,10 +283,9 @@ task combine_sublibraries {
     runtime {
         docker: "~{container_registry}/split_pipe:1.8.2"
         cpu: threads
-        cpuPlatform: "Intel Cascade Lake"
         memory: "~{mem_gb} GB"
         disks: "local-disk ~{disk_size} SSD"
-        preemptible: 3
+        preemptible: 0
         zones: zones
     }
 
