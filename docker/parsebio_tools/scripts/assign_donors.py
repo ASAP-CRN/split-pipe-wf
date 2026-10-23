@@ -90,17 +90,36 @@ def assign_subjects(
     return join_df
 
 
-def check_missing_subject_ids(join_df: pd.DataFrame, min_prop: float = 0.8) -> None:
+def check_missing_subject_ids(join_df: pd.DataFrame, min_prop: float = 0.1, warn_prop: float = 0.5) -> None:
     """
-    Raise if the proportion of cells with a vireo subject is below min_prop; a low
-    match rate means the cell metadata and vireo table do not describe the same cells.
+    Check the proportion of cells with a vireo subject. Below min_prop the cell metadata
+    and vireo table do not describe the same cells (a random overlap is ~1-2%, e.g.
+    sublibrary order differing from the vireo run) and this raises. Below warn_prop it
+    warns: split-pipe's cell calls can legitimately exceed those vireo was run on
+    (PB-002 pool_1, where the contributors' run called far fewer cells in most sublibraries).
     """
-    non_na_proportion = join_df['subject_id'].notna().mean()
+    non_na_proportion = join_df["subject_id"].notna().mean()
+    by_sublib = (
+        join_df.assign(sublib=join_df["bc_wells"].str.split("__").str[1])
+        .groupby("sublib")["subject_id"]
+        .apply(lambda s: round(s.notna().mean(), 3))
+        .to_dict()
+    )
     if non_na_proportion < min_prop:
-        logging.error(f"Proportion of non-NA subject_id is low: {non_na_proportion}")
-        raise ValueError(f"Proportion of non-NA subject_id is below the minimum threshold of {min_prop}: {non_na_proportion}")
+        raise ValueError(
+            f"Proportion of cells with a vireo subject is {non_na_proportion:.3f}, "
+            f"below {min_prop}; per sublibrary: {by_sublib}"
+        )
+    elif non_na_proportion < warn_prop:
+        logging.warning(
+            "Proportion of cells with a vireo subject is low: %.3f; per sublibrary: %s",
+            non_na_proportion, by_sublib,
+        )
     else:
-        logging.info(f"Proportion of non-NA subject_id: {non_na_proportion}")
+        logging.info(
+            "Proportion of cells with a vireo subject: %.3f; per sublibrary: %s",
+            non_na_proportion, by_sublib,
+        )
 
 
 def main(args: argparse.Namespace):

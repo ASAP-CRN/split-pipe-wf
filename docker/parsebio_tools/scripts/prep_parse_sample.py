@@ -193,7 +193,7 @@ def join_asap_metadata(
     # A missing sample is only expected for vireo's own non-singlet calls; anything 
     # else is a subject_id that does not match SAMPLE.csv for this batch
     vireo_non_singlets = {"doublet", "unassigned"}
-    unmatched = obs["sample"].isna() & ~obs["subject_id"].isin(vireo_non_singlets)
+    unmatched = obs["ASAP_sample_id"].isna() & ~obs["subject_id"].isin(vireo_non_singlets)
     if unmatched.any():
         missing = sorted(obs.loc[unmatched, "subject_id"].astype(str).unique())
         raise ValueError(
