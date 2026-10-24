@@ -44,6 +44,20 @@ workflow split_pipe_entrypoint {
         String zones = "us-central1-c us-central1-f"
     }
     
+    # Build once outside of the per-run scatter
+    if (!defined(genome_ref_tar_gz)) {
+        call SplitPipe.make_genome_ref {
+            input:
+                genome_name = genome_name,
+                genome_fasta = genome_fasta,
+                genes_gtf = genes_gtf,
+                container_registry = container_registry,
+                zones = zones
+        }
+    }
+
+    File genome_ref = select_first([genome_ref_tar_gz, make_genome_ref.genome_ref_tar_gz])
+    
     scatter run in parse_runs {
         call SplitPipe.split_pipe {
             input:
