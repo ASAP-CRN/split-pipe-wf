@@ -164,7 +164,7 @@ task merge_runs {
     }
 
     runtime {
-        docker: "~{container_registry}/parsebio_tools:0.2.0"
+        docker: "~{container_registry}/parsebio_tools:0.3.0"
         cpu: 4
         memory: "~{mem_gb} GB"
         disks: "local-disk ~{disk_size} SSD"

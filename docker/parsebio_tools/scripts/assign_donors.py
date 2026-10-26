@@ -45,10 +45,49 @@ def load_table(file_path: Path, check_join_key: str, sep: str = ",") -> pd.DataF
 VIREO_STAT_COLS = ["prob_max", "prob_doublet", "n_vars", "best_singlet", "best_doublet", "doublet_logLikRatio"]
 
 
+# Team Voet PB-002 pool_5: Contributors confirmed (2026-10-26) that donor9 in the
+# Vireo output is ASA_137. Since Vireo generically labels donorN, this replacement
+# is keyed to be specific to the dataset and Parse sample ("pool_5").
+VIREO_DONOR_RENAMES = {
+    ("team-voet-pmdbs-sn-rnaseq-parsebio", "pool_5"): {"donor9": "ASA_137"},
+}
+
+
+def rename_vireo_donors(join_df: pd.DataFrame, dataset_id: str) -> pd.DataFrame:
+    """
+    Apply confirmed vireo donor -> subject renames for this dataset and Parse sample
+    (VIREO_DONOR_RENAMES). Raises if an expected vireo donor is absent or the target subject
+    already has vireo-assigned cells, i.e. if the inputs no longer match the confirmation.
+    """
+    parse_sample = join_df["parse_sample"].iloc[0]
+    renames = VIREO_DONOR_RENAMES.get((dataset_id, parse_sample), {})
+    for vireo_donor, subject_id in renames.items():
+        is_donor = join_df["subject_id"] == vireo_donor
+        if not is_donor.any():
+            raise ValueError(f"Expected vireo donor {vireo_donor} in {dataset_id} {parse_sample}; not found")
+        if (join_df["subject_id"] == subject_id).any():
+            raise ValueError(f"{subject_id} already has vireo-assigned cells in {parse_sample}; not renaming {vireo_donor}")
+        logging.info(
+            "Renaming vireo donor %s to %s for %d cells (%s %s)",
+            vireo_donor, subject_id, is_donor.sum(), dataset_id, parse_sample,
+        )
+        join_df.loc[is_donor, "subject_id"] = subject_id
+        
+    # Any vireo donor still unnamed has no subject to join
+    leftover = sorted(join_df.loc[join_df["subject_id"].str.fullmatch(r"donor\d+"), "subject_id"].unique())
+    if leftover:
+        raise ValueError(
+            f"Vireo donors without a subject in {dataset_id} {parse_sample}: {leftover}"
+        )
+
+    return join_df
+
+
 def assign_subjects(
     cell_meta: pd.DataFrame,
     vireo_df: pd.DataFrame | None,
     subject_id: str | None,
+    dataset_id: str,
 ) -> pd.DataFrame:
     """
     Assign a subject to every cell in one Parse sample's cell metadata.
@@ -68,19 +107,13 @@ def assign_subjects(
         join_df.drop(columns=["cell"], inplace=True)
         join_df = join_df.rename(columns={"donor_id": "subject_id", **vireo_renames})
 
+        # Confirmed vireo donorN -> subject_id rename
+        join_df = rename_vireo_donors(join_df, dataset_id)
+        
         # Check the proportion of missing subject IDs and set NAs to "unassigned"
         check_missing_subject_ids(join_df)
         join_df["subject_id"] = join_df["subject_id"].fillna("unassigned")
         
-        # vireo labels donors it could not match to a genotype as donor<N>; no subject to join
-        unmatched_donor = join_df["subject_id"].str.fullmatch(r"donor\d+")
-        if unmatched_donor.any():
-            logging.warning(
-                "%d cells assigned to vireo donors with no genotype match %s; setting to unassigned",
-                unmatched_donor.sum(), sorted(join_df.loc[unmatched_donor, "subject_id"].unique()),
-            )
-            join_df.loc[unmatched_donor, "subject_id"] = "unassigned"
-
     else:
         join_df = cell_meta.copy()
         join_df["subject_id"] = subject_id
@@ -132,7 +165,13 @@ def main(args: argparse.Namespace):
     else:
         vireo_df = None
 
-    join_data = assign_subjects(cell_meta, vireo_df, subject_id=args.subject_id)
+    join_data = assign_subjects(
+        cell_meta,
+        vireo_df,
+        subject_id=args.subject_id,
+        dataset_id=args.dataset_id
+    )
+    
     join_data.to_csv(args.output, index=False)
 
 
@@ -163,6 +202,11 @@ if __name__ == "__main__":
         type=Path,
         required=True,
         help="Output CSV"
+    )
+    parser.add_argument(
+        "--dataset-id",
+        required=True,
+        help="ASAP dataset ID; scopes confirmed vireo donor renames (VIREO_DONOR_RENAMES)"
     )
 
     args = parser.parse_args()
