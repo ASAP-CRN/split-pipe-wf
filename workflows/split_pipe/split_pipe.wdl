@@ -25,18 +25,17 @@ workflow split_pipe {
         String run_timestamp
         
         String raw_data_path
-        String raw_data_path_prefix
         String billing_project
         String container_registry
         String zones
     }
 
-    String sub_workflow_name = "split_pipe"
-    String sub_workflow_version = "1.0.0"
-
     Array[Array[String]] workflow_info = [[run_timestamp, workflow_name, workflow_version, workflow_release]]
-
-    String workflow_raw_data_path_prefix = "~{raw_data_path_prefix}/~{sub_workflow_name}"
+    
+    # String sub_workflow_name = "split_pipe"
+    # String sub_workflow_version = "1.0.0"
+    # String raw_data_path_prefix
+    # String workflow_raw_data_path_prefix = "~{raw_data_path_prefix}/~{sub_workflow_name}"
 
     # Build reference genome index if it was not provided
     if (!defined(genome_ref_tar_gz)) {
@@ -84,10 +83,14 @@ workflow split_pipe {
     # Combine the output sublibaries into one object
     call combine_sublibraries {
         input:
+            dataset_id = dataset_id,
+            run_id = run_id,
             genome_ref_tar_gz = genome_ref_final,
             sublibrary_tars = split_pipe_sublibrary.sublibrary_tar_gz,  # Gathered Array[File] from the split-pipe scatter
-            dataset_id = dataset_id,
             sublibrary_ids = sublibrary_ids,
+            raw_data_path = raw_data_path,
+            workflow_info = workflow_info,
+            billing_project = billing_project,
             container_registry = container_registry,
             zones = zones
     }
@@ -95,7 +98,8 @@ workflow split_pipe {
     output {
         Array[String] sublibrary_bams = split_pipe_sublibrary.bam
         Array[String] sublibrary_star_logs = split_pipe_sublibrary.star_log
-        File combined_sublibs_tar_gz = combine_sublibraries.combined_sublibs_tar_gz
+        File combined_sublibs_tar_gz = combine_sublibraries.combined_sublibs_tar_gz #!FileCoercion
+
     }
 
     meta {
@@ -203,8 +207,8 @@ task split_pipe_sublibrary {
     Int mem_gb = 32  # TODO: Revisit, PB docs bin at 64/128/256 GB
     Int disk_size = ceil((size(genome_ref_tar_gz, "GB") + (size(flatten([fastq_R1s, fastq_R2s]), "GB")) * 5) + 50 )
 
-    # Per sublibrary deliverables
-    String bam_name = "~{dataset_id}.~{sublibrary_id}.barcode_headAligned_anno.bam"
+    # Per sublibrary-specific deliverables - the rest is carried forward in combine_sublibraries
+    String bam_name = "~{dataset_id}.~{sublibrary_id}.name_sorted.bam"
     String star_log_name = "~{dataset_id}.~{sublibrary_id}.barcode_headLog.final.out"
 
     command <<<
@@ -287,23 +291,32 @@ task split_pipe_sublibrary {
 
 task combine_sublibraries {
     input {
-        File genome_ref_tar_gz
         String dataset_id
+        String run_id
+        File genome_ref_tar_gz
         Array[File] sublibrary_tars
         Array[String] sublibrary_ids
+        
+        String raw_data_path
+        Array[Array[String]] workflow_info
+        String billing_project
         String container_registry
         String zones
     }
     
     File sublib_list = write_lines(sublibrary_ids)
+    String comb_name = "~{dataset_id}.~{run_id}.combined_sublibs"
+    String comb_tar_gz = "~{comb_name}.tar.gz"
+    
     Int threads = 16
     Int mem_gb = 48  # TODO: revisit if too generous
     Int disk_size = ceil((size(sublibrary_tars, "GB") * 8) + (size(genome_ref_tar_gz, "GB") * 3) + 50)
 
     command <<<
         set -euo pipefail
-
-        # split-pipe detects genome_dir in CWD -- declaring as argument in split-pipe call leads to tricky cromwell pathing interaction 
+        
+        # comb needs the genome ref around, but calling it as an argument leads to a tricky 
+        # interaction with cromwell pathing. Having it sit in the CWD gets around this.
         mkdir genome_ref
         tar -xzf ~{genome_ref_tar_gz} -C genome_ref --strip-components=1
 
@@ -322,12 +335,22 @@ task combine_sublibraries {
             --output_dir combined_sublibs \
             --nthreads ~{threads}
 
-        # TODO: Full directory with all outputs declared
-        tar -czf "~{dataset_id}.combined_sublibs.tar.gz" combined_sublibs
+        # Copy the summary reports to view alongside the compressed output
+        cp combined_sublibs/all-sample_analysis_summary.html "~{comb_name}.all-sample_analysis_summary.html"
+        cp combined_sublibs/agg_sample_summary.csv "~{comb_name}.agg_sample_summary.csv"
+        tar -czf "~{comb_tar_gz}" combined_sublibs
+
+        upload_outputs \
+            -b ~{billing_project} \
+            -d ~{raw_data_path} \
+            -i ~{write_tsv(workflow_info)} \
+            -o "~{comb_name}.all-sample_analysis_summary.html" \
+            -o "~{comb_name}.agg_sample_summary.csv" \
+            -o "~{comb_tar_gz}"
     >>>
 
     output {
-        File combined_sublibs_tar_gz = "~{dataset_id}.combined_sublibs.tar.gz"
+        String combined_sublibs_tar_gz = "~{raw_data_path}/~{comb_tar_gz}"
     }
 
     runtime {
@@ -345,7 +368,13 @@ task combine_sublibraries {
 
     parameter_meta {
         dataset_id: {help: "The unique identifier for the dataset."}
+        run_id: {help: "Parse run ID (e.g. PB-001); used in output names and cell-ID suffixes."}
         sublibrary_tars: {help: "Array of sublibrary tar.gz files to be combined."}
         sublibrary_ids: {help: "Array of sublibrary identifiers corresponding to the tar.gz files."}
+        raw_data_path: {help: "Raw data bucket path for split-pipe sublibrary outputs (`<raw_data_bucket>/workflow_execution/split_pipe/split_pipe_sublibrary/<split_pipe_sublibrary_task_version>`)."}
+        workflow_info: {help: "UTC timestamp, workflow name, workflow version, and GitHub release; stored in the file-level manifest and final manifest with all saved files."}
+        billing_project: {help: "Billing project to charge GCP costs."}
+        container_registry: {help: "Container registry where workflow Docker images are hosted."}
+        zones: {help: "Space-delimited set of GCP zones to spin up compute in. ['us-central1-c us-central1-f']"}
     }
 }
