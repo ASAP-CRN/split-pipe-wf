@@ -201,7 +201,7 @@ task prep_parse_sample {
     }
 
     runtime {
-        docker: "~{container_registry}/parsebio_tools:0.3.0"
+        docker: "~{container_registry}/parsebio_tools:0.3.1"
         cpu: threads
         memory: "~{mem_gb} GB"
         disks: "local-disk ~{disk_size} SSD"
@@ -276,7 +276,7 @@ task merge_and_plot_qc_metrics {
     }
 
     runtime {
-        docker: "~{container_registry}/parsebio_tools:0.3.0"
+        docker: "~{container_registry}/parsebio_tools:0.3.1"
         cpu: 4
         memory: "~{mem_gb} GB"
         disks: "local-disk ~{disk_size} SSD"
@@ -348,7 +348,7 @@ task filter {
     }
 
     runtime {
-        docker: "~{container_registry}/parsebio_tools:0.3.0"
+        docker: "~{container_registry}/parsebio_tools:0.3.1"
         cpu: 4
         memory: "~{mem_gb} GB"
         disks: "local-disk ~{disk_size} SSD"
@@ -427,7 +427,7 @@ task map_cell_types {
     }
 
     runtime {
-        docker: "~{container_registry}/parsebio_tools:0.3.0"
+        docker: "~{container_registry}/parsebio_tools:0.3.1"
         cpu: threads
         memory: "~{mem_gb} GB"
         disks: "local-disk ~{disk_size} SSD"
@@ -489,7 +489,7 @@ task add_mapped_cell_types {
     }
 
     runtime {
-        docker: "~{container_registry}/parsebio_tools:0.3.0"
+        docker: "~{container_registry}/parsebio_tools:0.3.1"
         cpu: 4
         memory: "~{mem_gb} GB"
         disks: "local-disk ~{disk_size} SSD"

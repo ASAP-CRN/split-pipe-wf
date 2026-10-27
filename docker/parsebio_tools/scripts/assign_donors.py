@@ -74,7 +74,7 @@ def rename_vireo_donors(join_df: pd.DataFrame, dataset_id: str) -> pd.DataFrame:
         join_df.loc[is_donor, "subject_id"] = subject_id
         
     # Any vireo donor still unnamed has no subject to join
-    leftover = sorted(join_df.loc[join_df["subject_id"].str.fullmatch(r"donor\d+"), "subject_id"].unique())
+    leftover = sorted(join_df.loc[join_df["subject_id"].str.fullmatch(r"donor\d+", na=False), "subject_id"].unique())
     if leftover:
         raise ValueError(
             f"Vireo donors without a subject in {dataset_id} {parse_sample}: {leftover}"
