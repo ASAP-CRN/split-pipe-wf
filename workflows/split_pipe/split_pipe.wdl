@@ -7,6 +7,7 @@ import "../structs.wdl"
 workflow split_pipe {
     input {
         String dataset_id
+        String run_id
         Array[Sublibrary] sublibraries
         String genome_name
         File? genome_ref_tar_gz
@@ -18,9 +19,24 @@ workflow split_pipe {
         File sample_list_tsv
         File? parameter_file
         
+        String workflow_name
+        String workflow_version
+        String workflow_release
+        String run_timestamp
+        
+        String raw_data_path
+        String raw_data_path_prefix
+        String billing_project
         String container_registry
         String zones
     }
+
+    String sub_workflow_name = "split_pipe"
+    String sub_workflow_version = "1.0.0"
+
+    Array[Array[String]] workflow_info = [[run_timestamp, workflow_name, workflow_version, workflow_release]]
+
+    String workflow_raw_data_path_prefix = "~{raw_data_path_prefix}/~{sub_workflow_name}"
 
     # Build reference genome index if it was not provided
     if (!defined(genome_ref_tar_gz)) {
@@ -41,7 +57,7 @@ workflow split_pipe {
 
     # Run split-pipe on each sublibrary
     scatter (sublibrary in sublibraries) {
-        String sublibrary_id = sublibrary.sublibrary_id  # Declare as gathered for array input for combine_sublibraries
+        String sublibrary_id = sublibrary.sublibrary_id  # Declare so it can be gathered for array input for combine_sublibraries
         
         call split_pipe_sublibrary {
             input:
@@ -54,6 +70,10 @@ workflow split_pipe {
                 fastq_R2s = sublibrary.fastq_R2s,
                 sample_list_tsv = sample_list_tsv,
                 parameter_file = parameter_file,
+                
+                raw_data_path = raw_data_path,
+                workflow_info = workflow_info,
+                billing_project = billing_project,
                 container_registry = container_registry,
                 zones = zones
         }
@@ -73,7 +93,8 @@ workflow split_pipe {
     }
 
     output {
-        # TODO: Output uncompressed directory with all outputs declared?
+        Array[String] sublibrary_bams = split_pipe_sublibrary.bam
+        Array[String] sublibrary_star_logs = split_pipe_sublibrary.star_log
         File combined_sublibs_tar_gz = combine_sublibraries.combined_sublibs_tar_gz
     }
 
@@ -92,8 +113,11 @@ workflow split_pipe {
         kit: {help: "Kit used in the experiment."}
         sample_list_tsv: {help: "Path to the sample loading table file."}
         parameter_file: {help: "Optional path to the parameter file."}
+        raw_data_path: {help: "Raw data bucket path for split-pipe sublibrary outputs (`<raw_data_bucket>/workflow_execution/split_pipe/split_pipe_sublibrary/<split_pipe_sublibrary_task_version>`)."}
+        workflow_info: {help: "UTC timestamp, workflow name, workflow version, and GitHub release; stored in the file-level manifest and final manifest with all saved files."}
+        billing_project: {help: "Billing project to charge GCP costs."}
         container_registry: {help: "Container registry where workflow Docker images are hosted."}
-        zones: {help: "Compute zones to run the workflow in."}
+        zones: {help: "Space-delimited set of GCP zones to spin up compute in. ['us-central1-c us-central1-f']"}
     }
 }
 
@@ -158,15 +182,19 @@ task make_reference {
 
 task split_pipe_sublibrary {
     input {
-        File genome_ref_tar_gz
         String dataset_id
         String sublibrary_id
+        File genome_ref_tar_gz
         String chemistry
         String kit
         Array[File] fastq_R1s
         Array[File] fastq_R2s
         File sample_list_tsv
         File? parameter_file
+        
+        String raw_data_path
+        Array[Array[String]] workflow_info
+        String billing_project
         String container_registry
         String zones
     }
@@ -174,6 +202,10 @@ task split_pipe_sublibrary {
     Int threads = 16
     Int mem_gb = 32  # TODO: Revisit, PB docs bin at 64/128/256 GB
     Int disk_size = ceil((size(genome_ref_tar_gz, "GB") + (size(flatten([fastq_R1s, fastq_R2s]), "GB")) * 5) + 50 )
+
+    # Per sublibrary deliverables
+    String bam_name = "~{dataset_id}.~{sublibrary_id}.barcode_headAligned_anno.bam"
+    String star_log_name = "~{dataset_id}.~{sublibrary_id}.barcode_headLog.final.out"
 
     command <<<
         set -euo pipefail
@@ -202,11 +234,24 @@ task split_pipe_sublibrary {
             exit 1
         fi
         
+        # Name-sorted, tag-annotated BAM (not needed by comb); moved out so it is not carried in the tarball
+        mv ~{sublibrary_id}/process/barcode_headAligned_anno.bam "~{bam_name}"
+        cp ~{sublibrary_id}/process/barcode_headLog.final.out "~{star_log_name}"
+
+        upload_outputs \
+            -b ~{billing_project} \
+            -d ~{raw_data_path} \
+            -i ~{write_tsv(workflow_info)} \
+            -o "~{bam_name}" \
+            -o "~{star_log_name}"
+
         tar -czf ~{dataset_id}.~{sublibrary_id}.tar.gz ~{sublibrary_id}        
     >>>
 
     output {
-        File sublibrary_tar_gz = "~{dataset_id}.~{sublibrary_id}.tar.gz"
+        File sublibrary_tar_gz = "~{dataset_id}.~{sublibrary_id}.tar.gz"  # Passed to comb, not uploaded b/c it becomes part of comb output
+        String bam = "~{raw_data_path}/~{bam_name}"
+        String star_log = "~{raw_data_path}/~{star_log_name}"
     }
 
     runtime {
@@ -231,6 +276,11 @@ task split_pipe_sublibrary {
         fastq_R2s: {help: "Array of FASTQ files for read 2."}
         sample_list_tsv: {help: "Path to the sample table file."}
         parameter_file: {help: "Optional path to the parameter file."}
+        raw_data_path: {help: "Raw data bucket path for split-pipe sublibrary outputs (`<raw_data_bucket>/workflow_execution/split_pipe/split_pipe_sublibrary/<split_pipe_sublibrary_task_version>`)."}
+        workflow_info: {help: "UTC timestamp, workflow name, workflow version, and GitHub release; stored in the file-level manifest and final manifest with all saved files."}
+        billing_project: {help: "Billing project to charge GCP costs."}
+        container_registry: {help: "Container registry where workflow Docker images are hosted."}
+        zones: {help: "Space-delimited set of GCP zones to spin up compute in. ['us-central1-c us-central1-f']"}
     }
 }
 
