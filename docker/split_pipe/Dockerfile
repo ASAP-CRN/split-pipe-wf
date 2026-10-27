@@ -1,5 +1,8 @@
 ARG MINICONDA_VERSION
 
+# Utility script (upload_outputs) from container to upload split-pipe outputs to GCP
+FROM us-central1-docker.pkg.dev/dnastack-asap-parkinsons/workflow-images/util:1.2.0 AS scripts
+
 # Unzip the split-pipe source code and copy it into the image
 FROM ubuntu:jammy AS tools
 
@@ -33,6 +36,7 @@ RUN apt-get -yq update \
         gcc \
         wget \
         unzip \
+        xxd \
     && rm -rf /var/lib/apt/lists/*
 
 RUN conda create -n split-pipe python=${PYTHON_VERSION} -y
@@ -55,3 +59,6 @@ RUN wget "https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-clou
     && rm "google-cloud-cli-${GCLOUD_CLI_VERSION}-linux-x86_64.tar.gz"
 
 ENV PATH "${PATH}:/opt/google-cloud-sdk/bin"
+
+COPY --from=scripts /opt/scripts /opt/scripts
+ENV PATH "${PATH}:/opt/scripts"
