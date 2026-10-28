@@ -29,10 +29,18 @@ workflow postprocess {
         File allen_brain_mmc_precomputed_stats_h5
         File? allen_brain_mmc_marker_genes_json
 
+        String workflow_name
+        String workflow_version
+        String workflow_release
+        String run_timestamp
+        
+        String raw_data_path
+        String billing_project
         String container_registry
-        String zones = "us-central1-c us-central1-f"
+        String zones
     }
 
+    Array[Array[String]] workflow_info = [[run_timestamp, workflow_name, workflow_version, workflow_release]]
     String run_prefix = "~{dataset_id}.~{run_id}"
 
     scatter (parse_sample in parse_samples) {
@@ -65,6 +73,9 @@ workflow postprocess {
             output_prefix = run_prefix,
             merge_keys = merge_key,
             prepped_adata_objects = prep_parse_sample.prepped_adata,
+            raw_data_path = raw_data_path,
+            workflow_info = workflow_info,
+            billing_project = billing_project,
             container_registry = container_registry,
             zones = zones
     }
@@ -72,13 +83,16 @@ workflow postprocess {
     call filter {
         input:
             output_prefix = run_prefix,
-            merged_adata_object = merge_and_plot_qc_metrics.merged_adata_object,
+            merged_adata_object = merge_and_plot_qc_metrics.merged_adata_object, #!FileCoercion
             pct_counts_mt_max = pct_counts_mt_max,
             doublet_score_max = doublet_score_max,
             total_counts_limits = total_counts_limits,
             n_genes_by_counts_limits = n_genes_by_counts_limits,
             n_mads_lower = n_mads_lower,
             n_mads_upper = n_mads_upper,
+            raw_data_path = raw_data_path,
+            workflow_info = workflow_info,
+            billing_project = billing_project,
             container_registry = container_registry,
             zones = zones
     }
@@ -90,6 +104,9 @@ workflow postprocess {
             mmc_taxonomy = mmc_taxonomy,
             allen_brain_mmc_precomputed_stats_h5 = allen_brain_mmc_precomputed_stats_h5,
             allen_brain_mmc_marker_genes_json = allen_brain_mmc_marker_genes_json,
+            raw_data_path = raw_data_path,
+            workflow_info = workflow_info,
+            billing_project = billing_project,
             container_registry = container_registry,
             zones = zones
     }
@@ -98,24 +115,26 @@ workflow postprocess {
         input:
             output_prefix = run_prefix,
             filtered_adata_object = filter.filtered_adata_object,
-            mmc_results_csv = map_cell_types.mmc_results_csv,
+            mmc_results_csv = map_cell_types.mmc_results_csv, #!FileCoercion
+            raw_data_path = raw_data_path,
+            workflow_info = workflow_info,
+            billing_project = billing_project,
             container_registry = container_registry,
             zones = zones
     }
 
     output {
-        Array[File] prepped_adata = prep_parse_sample.prepped_adata
-        File merged_adata = merge_and_plot_qc_metrics.merged_adata_object
-        File initial_metadata = merge_and_plot_qc_metrics.qc_initial_metadata_csv
-        Array[File] qc_plots = merge_and_plot_qc_metrics.qc_plots_png
+        File merged_adata = merge_and_plot_qc_metrics.merged_adata_object #!FileCoercion
+        File initial_metadata = merge_and_plot_qc_metrics.qc_initial_metadata_csv #!FileCoercion
+        Array[File] qc_plots = merge_and_plot_qc_metrics.qc_plots_png #!FileCoercion
         File filtered_adata_object = filter.filtered_adata_object
-        File unassigned_removed_cells_csv = filter.unassigned_removed_cells_csv
-        File filtered_out_cells_csv = filter.filtered_out_cells_csv
-        File mmc_extended_results_json = map_cell_types.mmc_extended_results_json
-        File mmc_results_csv = map_cell_types.mmc_results_csv
-        File mmc_log_txt = map_cell_types.mmc_log_txt
+        File unassigned_removed_cells_csv = filter.unassigned_removed_cells_csv #!FileCoercion
+        File filtered_out_cells_csv = filter.filtered_out_cells_csv #!FileCoercion
+        File mmc_extended_results_json = map_cell_types.mmc_extended_results_json #!FileCoercion
+        File mmc_results_csv = map_cell_types.mmc_results_csv #!FileCoercion
+        File mmc_log_txt = map_cell_types.mmc_log_txt #!FileCoercion
         File mmc_adata_object = add_mapped_cell_types.mmc_adata_object
-        File mmc_results_parquet = add_mapped_cell_types.mmc_results_parquet
+        File mmc_results_parquet = add_mapped_cell_types.mmc_results_parquet #!FileCoercion
     }
 
     parameter_meta {
@@ -137,6 +156,12 @@ workflow postprocess {
         mmc_taxonomy: {help: "Cell type taxonomy of the precomputed stats reference; appended to MMC output filenames. Must match allen_brain_mmc_precomputed_stats_h5."}
         allen_brain_mmc_precomputed_stats_h5: {help: "A precomputed statistics file from the Allen Brain Cell Atlas containing reference statistics (the average gene expression profile per cell type cluster and cell type taxonomy)."}
         allen_brain_mmc_marker_genes_json: {help: "Optional marker gene lookup (parent node -> marker genes), e.g. extracted from a previous run's extended_results.json. If provided, skips on-the-fly marker computation."}
+        workflow_name: {help: "Workflow name; stored in the file-level manifest and final manifest with all saved files."}
+        workflow_version: {help: "Workflow version; stored in the file-level manifest and final manifest with all saved files."}
+        workflow_release: {help: "GitHub release; stored in the file-level manifest and final manifest with all saved files."}
+        run_timestamp: {help: "UTC timestamp; stored in the file-level manifest and final manifest with all saved files."}
+        raw_data_path: {help: "Raw data bucket path for postprocess outputs."}
+        billing_project: {help: "Billing project to charge GCP costs."}
         container_registry: {help: "Container registry where workflow Docker images are hosted."}
         zones: {help: "Space-delimited set of GCP zones to spin up compute in. ['us-central1-c us-central1-f']"}
     }
@@ -156,6 +181,7 @@ task prep_parse_sample {
         File sample_csv
         File subject_csv
         File? sample_map
+
         String container_registry
         String zones
     }
@@ -196,12 +222,11 @@ task prep_parse_sample {
     >>>
 
     output {
-        File donor_assignments_csv = donor_assignments
         File prepped_adata = adata_out
     }
 
     runtime {
-        docker: "~{container_registry}/parsebio_tools:0.3.1"
+        docker: "~{container_registry}/parsebio_tools:0.3.2"
         cpu: threads
         memory: "~{mem_gb} GB"
         disks: "local-disk ~{disk_size} SSD"
@@ -237,6 +262,10 @@ task merge_and_plot_qc_metrics {
         String output_prefix
         Array[String] merge_keys
         Array[File] prepped_adata_objects
+
+        String raw_data_path
+        Array[Array[String]] workflow_info
+        String billing_project
         String container_registry
         String zones
     }
@@ -261,22 +290,33 @@ task merge_and_plot_qc_metrics {
         mv "plots/violin_pct_counts_rb.png" "plots/~{output_prefix}.pct_counts_rb.violin.png"
         mv "plots/violin_doublet_score.png" "plots/~{output_prefix}.doublet_score.violin.png"
 
+        upload_outputs \
+            -b ~{billing_project} \
+            -d ~{raw_data_path} \
+            -i ~{write_tsv(workflow_info)} \
+            -o "~{output_prefix}.merged_unfiltered.h5ad" \
+            -o "~{output_prefix}.initial_metadata.csv" \
+            -o "plots/~{output_prefix}.n_genes_by_counts.violin.png" \
+            -o "plots/~{output_prefix}.total_counts.violin.png" \
+            -o "plots/~{output_prefix}.pct_counts_mt.violin.png" \
+            -o "plots/~{output_prefix}.pct_counts_rb.violin.png" \
+            -o "plots/~{output_prefix}.doublet_score.violin.png"
     >>>
 
     output {
-        File merged_adata_object = "~{output_prefix}.merged_unfiltered.h5ad"
-        File qc_initial_metadata_csv = "~{output_prefix}.initial_metadata.csv"
-        Array[File] qc_plots_png = [
-            "plots/~{output_prefix}.n_genes_by_counts.violin.png",
-            "plots/~{output_prefix}.total_counts.violin.png",
-            "plots/~{output_prefix}.pct_counts_mt.violin.png",
-            "plots/~{output_prefix}.pct_counts_rb.violin.png",
-            "plots/~{output_prefix}.doublet_score.violin.png"
+        String merged_adata_object = "~{raw_data_path}/~{output_prefix}.merged_unfiltered.h5ad"
+        String qc_initial_metadata_csv = "~{raw_data_path}/~{output_prefix}.initial_metadata.csv"
+        Array[String] qc_plots_png = [
+            "~{raw_data_path}/~{output_prefix}.n_genes_by_counts.violin.png",
+            "~{raw_data_path}/~{output_prefix}.total_counts.violin.png",
+            "~{raw_data_path}/~{output_prefix}.pct_counts_mt.violin.png",
+            "~{raw_data_path}/~{output_prefix}.pct_counts_rb.violin.png",
+            "~{raw_data_path}/~{output_prefix}.doublet_score.violin.png"
         ]
     }
 
     runtime {
-        docker: "~{container_registry}/parsebio_tools:0.3.1"
+        docker: "~{container_registry}/parsebio_tools:0.3.2"
         cpu: 4
         memory: "~{mem_gb} GB"
         disks: "local-disk ~{disk_size} SSD"
@@ -293,6 +333,9 @@ task merge_and_plot_qc_metrics {
         output_prefix: {help: "Prefix for output files of the form <dataset_id>.<run_id>."}
         merge_keys: {help: "Concat key per AnnData object, in the same order as prepped_adata_objects (<run_id>.<parse_sample>); becomes the cell-ID suffix."}
         prepped_adata_objects: {help: "An array of Parse Sample-level AnnData objects to merge."}
+        raw_data_path: {help: "Raw data bucket path for postprocess outputs."}
+        workflow_info: {help: "UTC timestamp, workflow name, workflow version, and GitHub release; stored in the file-level manifest and final manifest with all saved files."}
+        billing_project: {help: "Billing project to charge GCP costs."}
         container_registry: {help: "Container registry where workflow Docker images are hosted."}
         zones: {help: "Space-delimited set of GCP zones to spin up compute in. ['us-central1-c us-central1-f']"}
     }
@@ -311,6 +354,9 @@ task filter {
         Float n_mads_lower
         Float n_mads_upper
 
+        String raw_data_path
+        Array[Array[String]] workflow_info
+        String billing_project
         String container_registry
         String zones
     }
@@ -339,16 +385,23 @@ task filter {
             --n-mads-upper ~{n_mads_upper} \
             --adata-output ~{output_prefix}.filtered.h5ad \
             --output-removed-cells-file ~{output_prefix}.filtered_out_cells.csv
+
+        upload_outputs \
+            -b ~{billing_project} \
+            -d ~{raw_data_path} \
+            -i ~{write_tsv(workflow_info)} \
+            -o "~{output_prefix}.unassigned_removed_cells.csv" \
+            -o "~{output_prefix}.filtered_out_cells.csv"
     >>>
 
     output {
         File filtered_adata_object = "~{output_prefix}.filtered.h5ad"
-        File unassigned_removed_cells_csv = "~{output_prefix}.unassigned_removed_cells.csv"
-        File filtered_out_cells_csv = "~{output_prefix}.filtered_out_cells.csv"
+        String unassigned_removed_cells_csv = "~{raw_data_path}/~{output_prefix}.unassigned_removed_cells.csv"
+        String filtered_out_cells_csv = "~{raw_data_path}/~{output_prefix}.filtered_out_cells.csv"
     }
 
     runtime {
-        docker: "~{container_registry}/parsebio_tools:0.3.1"
+        docker: "~{container_registry}/parsebio_tools:0.3.2"
         cpu: 4
         memory: "~{mem_gb} GB"
         disks: "local-disk ~{disk_size} SSD"
@@ -370,6 +423,9 @@ task filter {
         n_genes_by_counts_limits: {help: "Absolute minimum and maximum number of genes detected per cell (genes with at least one count); applied on top of the MAD-based thresholds. [300, 15000]"}
         n_mads_lower: {help: "Number of median absolute deviations below the per-sample median allowed for total UMI counts and number of genes detected per cell. [3]"}
         n_mads_upper: {help: "Number of median absolute deviations above the per-sample median allowed for total UMI counts and number of genes detected per cell. [5]"}
+        raw_data_path: {help: "Raw data bucket path for postprocess outputs."}
+        workflow_info: {help: "UTC timestamp, workflow name, workflow version, and GitHub release; stored in the file-level manifest and final manifest with all saved files."}
+        billing_project: {help: "Billing project to charge GCP costs."}
         container_registry: {help: "Container registry where workflow Docker images are hosted."}
         zones: {help: "Space-delimited set of GCP zones to spin up compute in. ['us-central1-c us-central1-f']"}
     }
@@ -385,6 +441,9 @@ task map_cell_types {
         File allen_brain_mmc_precomputed_stats_h5
         File? allen_brain_mmc_marker_genes_json
 
+        String raw_data_path
+        Array[Array[String]] workflow_info
+        String billing_project
         String container_registry
         String zones
     }
@@ -418,20 +477,28 @@ task map_cell_types {
             --n-processors ~{threads} \
             --output-prefix ~{mmc_output_prefix} \
             ~{if defined(allen_brain_mmc_marker_genes_json) then "--mmc-marker-genes " + allen_brain_mmc_marker_genes_json else ""}
+
+        upload_outputs \
+            -b ~{billing_project} \
+            -d ~{raw_data_path} \
+            -i ~{write_tsv(workflow_info)} \
+            -o "~{mmc_output_prefix}.extended_results.json" \
+            -o "~{mmc_output_prefix}.results.csv" \
+            -o "~{mmc_output_prefix}.log.txt"
     >>>
 
     output {
-        File mmc_extended_results_json = "~{mmc_output_prefix}.extended_results.json"
-        File mmc_results_csv = "~{mmc_output_prefix}.results.csv"
-        File mmc_log_txt = "~{mmc_output_prefix}.log.txt"
+        String mmc_extended_results_json = "~{raw_data_path}/~{mmc_output_prefix}.extended_results.json"
+        String mmc_results_csv = "~{raw_data_path}/~{mmc_output_prefix}.results.csv"
+        String mmc_log_txt = "~{raw_data_path}/~{mmc_output_prefix}.log.txt"
     }
 
     runtime {
-        docker: "~{container_registry}/parsebio_tools:0.3.1"
+        docker: "~{container_registry}/parsebio_tools:0.3.2"
         cpu: threads
         memory: "~{mem_gb} GB"
         disks: "local-disk ~{disk_size} SSD"
-        preemptible: 0  # TODO: update to 3 after cached
+        preemptible: 3
         bootDiskSizeGb: 40
         zones: zones
     }
@@ -446,6 +513,9 @@ task map_cell_types {
         mmc_taxonomy: {help: "Cell type taxonomy of the precomputed stats reference; appended to MMC output filenames. Must match allen_brain_mmc_precomputed_stats_h5."}
         allen_brain_mmc_precomputed_stats_h5: {help: "A precomputed statistics file from the Allen Brain Cell Atlas containing reference statistics (the average gene expression profile per cell type cluster and cell type taxonomy)."}
         allen_brain_mmc_marker_genes_json: {help: "Optional marker gene lookup (parent node -> marker genes), e.g. extracted from a previous run's extended_results.json. If provided, skips on-the-fly marker computation."}
+        raw_data_path: {help: "Raw data bucket path for postprocess outputs."}
+        workflow_info: {help: "UTC timestamp, workflow name, workflow version, and GitHub release; stored in the file-level manifest and final manifest with all saved files."}
+        billing_project: {help: "Billing project to charge GCP costs."}
         container_registry: {help: "Container registry where workflow Docker images are hosted."}
         zones: {help: "Space-delimited set of GCP zones to spin up compute in. ['us-central1-c us-central1-f']"}
     }
@@ -458,6 +528,9 @@ task add_mapped_cell_types {
         File filtered_adata_object
         File mmc_results_csv
 
+        String raw_data_path
+        Array[Array[String]] workflow_info
+        String billing_project
         String container_registry
         String zones
     }
@@ -481,15 +554,21 @@ task add_mapped_cell_types {
             --mmc-results ~{mmc_results_csv} \
             --adata-output ~{output_prefix}.mmc.h5ad \
             --output-cell-types-file ~{output_prefix}.mmc_results.parquet
+
+        upload_outputs \
+            -b ~{billing_project} \
+            -d ~{raw_data_path} \
+            -i ~{write_tsv(workflow_info)} \
+            -o "~{output_prefix}.mmc_results.parquet"
     >>>
 
     output {
         File mmc_adata_object = "~{output_prefix}.mmc.h5ad"
-        File mmc_results_parquet = "~{output_prefix}.mmc_results.parquet"
+        String mmc_results_parquet = "~{raw_data_path}/~{output_prefix}.mmc_results.parquet"
     }
 
     runtime {
-        docker: "~{container_registry}/parsebio_tools:0.3.1"
+        docker: "~{container_registry}/parsebio_tools:0.3.2"
         cpu: 4
         memory: "~{mem_gb} GB"
         disks: "local-disk ~{disk_size} SSD"
@@ -506,6 +585,9 @@ task add_mapped_cell_types {
         output_prefix: {help: "Prefix for output files of the form <dataset_id>.<run_id>."}
         filtered_adata_object: {help: "QC-filtered AnnData object."}
         mmc_results_csv: {help: "Cell type mapping results CSV produced by map_cell_types."}
+        raw_data_path: {help: "Raw data bucket path for postprocess outputs."}
+        workflow_info: {help: "UTC timestamp, workflow name, workflow version, and GitHub release; stored in the file-level manifest and final manifest with all saved files."}
+        billing_project: {help: "Billing project to charge GCP costs."}
         container_registry: {help: "Container registry where workflow Docker images are hosted."}
         zones: {help: "Space-delimited set of GCP zones to spin up compute in. ['us-central1-c us-central1-f']"}
     }
