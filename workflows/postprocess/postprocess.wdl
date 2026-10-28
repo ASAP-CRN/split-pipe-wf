@@ -361,8 +361,7 @@ task filter {
         String zones
     }
 
-    Int calc_mem_gb = ceil(size(merged_adata_object, "GB") * 18 + 20)
-    Int mem_gb = if calc_mem_gb > 624 then 624 else calc_mem_gb
+    Int calc_mem_gb = ceil(size(merged_adata_object, "GB") * 6 + 8)
     Int disk_size = ceil(size(merged_adata_object, "GB") * 4 + 20)
 
     command <<<
@@ -539,9 +538,7 @@ task add_mapped_cell_types {
     # "pmdbs_sc_rnaseq" selects the human branch, currently the only supported in this workflow.
     String sc_tools_workflow_name = "pmdbs_sc_rnaseq"
 
-    # TODO: revisit, seems generous
-    Int calc_mem_gb = ceil(size(filtered_adata_object, "GB") * 18 + 20)
-    Int mem_gb = if calc_mem_gb > 624 then 624 else calc_mem_gb
+    Int calc_mem_gb = ceil(size(filtered_adata_object, "GB") * 4 + 8)
     Int disk_size = ceil(size(filtered_adata_object, "GB") * 4 + 20)
 
     command <<<
