@@ -47,7 +47,8 @@ VIREO_STAT_COLS = ["prob_max", "prob_doublet", "n_vars", "best_singlet", "best_d
 
 # Team Voet PB-002 pool_5: Contributors confirmed (2026-10-26) that donor9 in the
 # Vireo output is ASA_137. Since Vireo generically labels donorN, this replacement
-# is keyed to be specific to the dataset and Parse sample ("pool_5").
+# is keyed to be specific to the dataset and Parse sample ("pool_5"). This name
+# exists only in PB-002 and does not/will never exist in PB-001.
 VIREO_DONOR_RENAMES = {
     ("team-voet-pmdbs-sn-rnaseq-parsebio", "pool_5"): {"donor9": "ASA_137"},
 }
@@ -123,13 +124,18 @@ def assign_subjects(
     return join_df
 
 
-def check_missing_subject_ids(join_df: pd.DataFrame, min_prop: float = 0.1, warn_prop: float = 0.5) -> None:
+def check_missing_subject_ids(
+    join_df: pd.DataFrame, min_prop: float = 0.05, warn_prop: float = 0.5, min_sublib_prop: float = 0.05
+) -> None:
     """
     Check the proportion of cells with a vireo subject. Below min_prop the cell metadata
-    and vireo table do not describe the same cells (a random overlap is ~1-2%, e.g.
-    sublibrary order differing from the vireo run) and this raises. Below warn_prop it
-    warns: split-pipe's cell calls can legitimately exceed those vireo was run on
-    (PB-002 pool_1, where the contributors' run called far fewer cells in most sublibraries).
+    and vireo table do not describe the same cells (a random overlap is ~1-3%, e.g. the
+    wrong vireo file) and this raises. Any single sublibrary below min_sublib_prop also
+    raises: a sublibrary order differing from the vireo run leaves the overall proportion
+    high but drops the swapped sublibraries to random overlap. Below warn_prop it warns:
+    split-pipe's cell calls can legitimately exceed those vireo was run on (PB-002 pool_1,
+    where the contributors' run called far fewer cells in most sublibraries; lowest
+    sublibrary observed 0.152).
     """
     non_na_proportion = join_df["subject_id"].notna().mean()
     by_sublib = (
@@ -138,10 +144,16 @@ def check_missing_subject_ids(join_df: pd.DataFrame, min_prop: float = 0.1, warn
         .apply(lambda s: round(s.notna().mean(), 3))
         .to_dict()
     )
+    low_sublibs = {sublib: prop for sublib, prop in by_sublib.items() if prop < min_sublib_prop}
     if non_na_proportion < min_prop:
         raise ValueError(
             f"Proportion of cells with a vireo subject is {non_na_proportion:.3f}, "
             f"below {min_prop}; per sublibrary: {by_sublib}"
+        )
+    elif low_sublibs:
+        raise ValueError(
+            f"Sublibraries with a vireo subject proportion below {min_sublib_prop} "
+            f"(sublibrary order may differ from the vireo run): {low_sublibs}; per sublibrary: {by_sublib}"
         )
     elif non_na_proportion < warn_prop:
         logging.warning(
