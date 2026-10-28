@@ -10,15 +10,16 @@ Common workflows, tasks, utility scripts, and docker images reused across harmon
 - [Workflows](#workflows)
 - [Inputs](#inputs)
     - [Postprocess inputs](#postprocess-inputs)
+    - [Structs](#structs)
 - [Outputs](#outputs)
     - [Postprocess outputs](#postprocess-outputs)
 - [Docker images](#docker-images)
 
 
-> **Status: work in progress.** The `mkref → all → comb` skeleton runs end to end.
-> Postprocessing (donor assignment, QC metrics, doublet scoring, filtering) runs as a
-> separate entrypoint on the `comb` output and is not yet wired into `main.wdl`.
-> Bucket staging is not yet implemented.
+> **Status: work in progress.** `main.wdl` runs every Parse run from FASTQs to a filtered,
+> cell-typed AnnData object and merges the runs into one object. Declaring the remaining
+> outputs (count matrices, BAMs, reports) and staging them into raw and staging buckets is
+> not yet implemented.
 
 
 # Workflows
@@ -26,10 +27,17 @@ Common workflows, tasks, utility scripts, and docker images reused across harmon
 Workflows are defined in [the `workflows` directory](workflows).
 
 Workflow names:
-- `split_pipe_entrypoint`: `split-pipe` processing, from FASTQs to the combined (`comb`) output
-- `postprocess_entrypoint`: from the `comb` output to a filtered AnnData object per Parse run
+- `split_pipe_entrypoint` ([workflows/main.wdl](workflows/main.wdl)): the full workflow. Builds
+  the reference once, then for each Parse run calls `split_pipe` and `postprocess`, and finally
+  merges the runs (`merge_runs`).
+- `split_pipe` ([workflows/split_pipe/split_pipe.wdl](workflows/split_pipe/split_pipe.wdl)):
+  `split-pipe` processing for one Parse run, from FASTQs to the combined (`comb`) output.
+- `postprocess` ([workflows/postprocess/postprocess.wdl](workflows/postprocess/postprocess.wdl)):
+  from one run's `comb` output to a filtered, cell-typed AnnData object.
 
-**Entrypoints**: [workflows/main.wdl](workflows/main.wdl), [workflows/postprocess/postprocess.wdl](workflows/postprocess/postprocess.wdl)
+`split_pipe` and `postprocess` can also be run on their own.
+
+**Entrypoint**: [workflows/main.wdl](workflows/main.wdl)
 
 **Input template**: [workflows/inputs_template.json](workflows/inputs_template.json)
 
@@ -72,7 +80,16 @@ filter
   ├── drop_unassigned_cells.py drops cells without an ASAP sample (vireo doublet/unassigned)
   └── filter                   sc_tools filter: mito, doublet score, count/gene limits and
                                per-sample MAD outliers
+        │
+map_cell_types             MapMyCells (cell_type_mapper), on-the-fly markers from gene symbols
+        │                  (sc_tools mmc)
+add_mapped_cell_types      attaches MMC labels and phenotypes (sc_tools transcriptional_phenotype)
 ```
+
+After every run is postprocessed, `merge_runs` (in `main.wdl`) concatenates the per-run
+cell-typed objects into one object (`merge_runs.py`). It checks that runs share the gene set,
+carry distinct `batch` values and have unique cell IDs. Runs can be merged at the end because
+no sample spans two runs and MMC labels each cell independently.
 
 Notes:
 
@@ -85,8 +102,9 @@ Notes:
 - **Doublets.** Scrublet runs on every called cell, including vireo doublets, so its
   `doublet_score` sees the full doublet population. Vireo detects doublets between donors,
   and scrublet detects doublets between cell types; both are applied.
-- **Cell IDs** are `<bc_wells>_<run_id>.<parse_sample>` (e.g. `01_01_15__s1_PB-001.pool_1`),
-  unique across Parse runs.
+- **Cell IDs** are `<bc_wells>_<run_id>.<parse_sample>_<n>` (e.g. `01_01_15__s1_PB-001.pool_1_0`),
+  unique across Parse runs. The trailing `_<n>` is the merge chunk added by sc_tools
+  `merge_and_plot_qc`, as in sc-rnaseq-wf.
 
 
 # Inputs
@@ -94,23 +112,36 @@ Notes:
 An input template file can be found at
 [workflows/inputs_template.json](workflows/inputs_template.json).
 
+The reference is built from the Cell Ranger GRCh38-2024-A FASTA and GTF
+(`fasta/genome.fa`, `genes/genes.gtf.gz`), the same annotation sc-rnaseq-wf uses, so both
+workflows count the same gene set.
+
+Inputs that differ between Parse runs (kit, chemistry, batch, sublibraries, Parse samples)
+are fields of each [ParseRun](#parserun); everything else is shared.
+
 | Type | Name | Description |
 | :- | :- | :- |
-| String | dataset_id | The unique name used to identify the dataset across the CRN Cloud.  |
-| Array[[Sublibrary](#sublibrary)] | sublibraries | The set of sublibraries to process, and their associated reads. |
+| String | dataset_id | The unique name used to identify the dataset across the CRN Cloud. |
+| String | team_id | ASAP team identifier; used in `batch_id`. |
+| Array[[ParseRun](#parserun)] | parse_runs | The Parse runs (kits) in the dataset. |
 | String | genome_name | Genome name; used to name the reference. Options: 'hg38' (human) or 'mm10' (mouse). |
-| File? | genome_ref_tar_gz | Prebuilt `split-pipe` mkref index, as a gzipped tarball. If supplied, `make_reference` is skipped; if omitted, an index is built from `genome_fasta` and `genes_gtf`. |
+| File? | genome_ref_tar_gz | Prebuilt `split-pipe` mkref index, as a gzipped tarball. If supplied, `make_reference` is skipped; if omitted, an index is built once from `genome_fasta` and `genes_gtf` and shared by all runs. |
 | File | genome_fasta | Reference genome FASTA. Only used when `genome_ref_tar_gz` is omitted. |
 | File | genes_gtf | Reference gene annotation GTF. Only used when `genome_ref_tar_gz` is omitted. |
-| String | chemistry | Parse Biosciences chemistry version. Options: 'v1'–'v4'. |
-| String | kit | Parse Biosciences kit. Options: 'WT_mini', 'WT', 'WT_mega', 'WT_mega_384', 'WT_penta', 'WT_penta_384'. |
-| File | sample_list_tsv | Sample table; one `sample_name<whitespace>wells` line per sample, where wells are **round-1** wells: how samples were aliquoted onto the plate prior to the rounds of barcoding (e.g. `sample_1 A1-A12,B1-B3`). |
 | File? | parameter_file | `split-pipe --parfile`; one `key value` pair per line. |
+| File | sample_csv | ASAP `SAMPLE.csv`. |
+| File | subject_csv | ASAP `SUBJECT.csv`. |
+| Int | pct_counts_mt_max | Maximum percentage of mitochondrial gene counts allowed per cell. [10] |
+| Float | doublet_score_max | Maximum scrublet doublet score allowed per cell. [0.2] |
+| Array[Int] | total_counts_limits | Absolute minimum and maximum total UMI counts per cell. [500, 150000] |
+| Array[Int] | n_genes_by_counts_limits | Absolute minimum and maximum number of genes detected per cell. [300, 15000] |
+| Float | n_mads_lower | Number of MADs below the per-sample median allowed for total counts and genes detected. [3] |
+| Float | n_mads_upper | Number of MADs above the per-sample median allowed for total counts and genes detected. [5] |
+| String | mmc_taxonomy | Taxonomy of the MapMyCells reference; appended to MMC output names (e.g. `siletti_20240330`). |
+| File | allen_brain_mmc_precomputed_stats_h5 | MapMyCells precomputed statistics for the reference taxonomy. |
+| File? | allen_brain_mmc_marker_genes_json | Marker gene lookup; if supplied, skips on-the-fly marker computation. |
 | String | container_registry | Container registry where workflow Docker images are hosted. |
 | String? | zones | GCP zones where compute will take place. ['us-central1-c us-central1-f'] |
-
-The sample table is a property of the kit run, not of any one sublibrary — every
-sublibrary of a kit run takes the same file.
 
 ## Postprocess inputs
 
@@ -124,18 +155,41 @@ sublibrary of a kit run takes the same file.
 | Array[[ParseSample](#parsesample)] | parse_samples | The Parse samples to process, and how to assign their cells to donors. |
 | File | sample_csv | ASAP `SAMPLE.csv`. |
 | File | subject_csv | ASAP `SUBJECT.csv`. |
+| File? | sample_map | CSV of `parse_sample,subject_id,sample_id`. Required when a subject has more than one sample in the batch, e.g. two brain regions loaded in different Parse samples. See [Sample map](#sample-map). |
 | Int | pct_counts_mt_max | Maximum percentage of mitochondrial gene counts allowed per cell. [10] |
 | Float | doublet_score_max | Maximum scrublet doublet score allowed per cell. [0.2] |
 | Array[Int] | total_counts_limits | Absolute minimum and maximum total UMI counts per cell, applied on top of the MAD-based thresholds. [500, 150000] |
 | Array[Int] | n_genes_by_counts_limits | Absolute minimum and maximum number of genes detected per cell, applied on top of the MAD-based thresholds. [300, 15000] |
 | Float | n_mads_lower | Number of MADs below the per-sample median allowed for total counts and genes detected. [3] |
 | Float | n_mads_upper | Number of MADs above the per-sample median allowed for total counts and genes detected. [5] |
+| String | mmc_taxonomy | Taxonomy of the MapMyCells reference; appended to MMC output names. |
+| File | allen_brain_mmc_precomputed_stats_h5 | MapMyCells precomputed statistics for the reference taxonomy. |
+| File? | allen_brain_mmc_marker_genes_json | Marker gene lookup; if supplied, skips on-the-fly marker computation. |
 | String | container_registry | Container registry where workflow Docker images are hosted. |
 | String? | zones | GCP zones where compute will take place. ['us-central1-c us-central1-f'] |
 
-Filter defaults match sc-rnaseq-wf.
+Filter and MMC defaults match sc-rnaseq-wf.
+
+### Sample map
+
+Vireo assigns each cell to a *subject* by genotype, but ASAP metadata is keyed by *sample*. When a subject contributed more than one sample to the same Parse run (e.g. substantia nigra and cingulate cortex), genotype alone cannot tell the two samples apart. What does tell them apart is which Parse sample (set of round-1 wells) the cell was loaded in. `sample_map` is a curated input that records that link: one row per ASAP sample as (Parse sample, ASAP subject, ASAP sample). Cells are then joined to `SAMPLE.csv` on (batch, Parse sample, subject). `SAMPLE.csv` cannot provide the link itself, because its `pool_id` is the sublibrary and every sublibrary contains cells from every sample. Without a map, prep fails and names the ambiguous subjects.
 
 ## Structs
+
+### ParseRun
+
+One Parse run: one kit's worth of samples, processed by `split_pipe` and `postprocess`.
+
+| Type | Name | Description |
+| :- | :- | :- |
+| String | run_id | Parse run ID (e.g. `PB-001`); used in output names and cell IDs. |
+| String | kit | Parse Biosciences kit. Options: 'WT_mini', 'WT', 'WT_mega', 'WT_mega_384', 'WT_penta', 'WT_penta_384'. |
+| String | chemistry | Parse Biosciences chemistry version. Options: 'v1'–'v4'. |
+| String | batch | `SAMPLE.csv` batch value for this run (e.g. `Batch1`). |
+| File | sample_list_tsv | Sample table; one `sample_name<whitespace>wells` line per Parse sample, where wells are **round-1** wells: how samples were aliquoted onto the plate prior to the rounds of barcoding (e.g. `sample_1 A1-A12,B1-B3`). Every sublibrary of the run takes the same file. |
+| File? | sample_map | See [Sample map](#sample-map). |
+| Array[[Sublibrary](#sublibrary)] | sublibraries | The run's sublibraries and their reads. |
+| Array[[ParseSample](#parsesample)] | parse_samples | The run's Parse samples, and how to assign their cells to donors. |
 
 ### Sublibrary
 
@@ -155,21 +209,31 @@ Exactly one of `vireo_donor_ids` and `subject_id` must be set.
 | File? | vireo_donor_ids | Vireo donor assignment TSV for a pooled Parse sample (columns `cell`, `donor_id`, ...); `cell` must match `split-pipe`'s `bc_wells`, including the `__s<n>` sublibrary suffix. |
 | String? | subject_id | Subject ID for an un-pooled Parse sample; assigned to every cell. |
 
-> `__s<n>` suffixes are assigned by `comb` from the order of the supplied sublibraries. Keep
+`team-voet-pmdbs-sn-rnaseq-parsebio` vireo notes:
+> `__s<n>` suffixes are assigned by `comb` from the order of the supplied sublibraries. The 
+> provided vireo files to link cells to donors depend on this ordering: keep
 > sublibraries in the same order as the run the vireo table was computed on;
-> `assign_donors.py` fails if too few cells match.
+> `assign_donors.py` fails if fewer than 10% of called cells match the vireo table (a wrong
+> order matches ~1–2%), and warns below 50%. A partial match is expected where `split-pipe`
+> calls more cells than vireo was run on.
+>
+> Vireo names a donor it learned without a supplied genotype by position (`donor<N>`).
+> These are renamed to a subject only where the contributors confirmed the identity
+> (`VIREO_DONOR_RENAMES` in `assign_donors.py`, keyed by dataset and Parse sample; currently
+> Team Voet PB-002 `pool_5`, `donor9` → `ASA_137`). Any other `donor<N>` fails
+> `assign_donors.py`.
 
 
 # Outputs
 
 | Type | Name | Description |
 | :- | :- | :- |
-| File | combined_sublibs_tar_gz | The `split-pipe --mode comb` output directory, as a gzipped tarball. |
+| File | final_merged_adata | `${dataset_id}.merged.mmc.h5ad`; all runs' filtered, cell-typed cells, raw counts, all genes (see [AnnData contents](#anndata-contents)). |
 
-> **WIP:** the workflow currently emits a single tarball. Declaring the
-> individual outputs — per-sample count matrices, the annotated BAMs, the
-> AnnData objects and the HTML summaries — and staging them into raw and staging
-> buckets is not yet implemented.
+> **WIP:** the workflow currently emits only the merged object; per-run outputs remain in the
+> execution directory. Declaring the individual outputs — per-sample count matrices, the
+> annotated BAMs, the HTML summaries and the QC reports — and staging them into raw and
+> staging buckets is not yet implemented.
 
 ## Postprocess outputs
 
@@ -182,6 +246,9 @@ Exactly one of `vireo_donor_ids` and `subject_id` must be set.
 | File | filtered_adata_object | `${dataset_id}.${run_id}.filtered.h5ad`; cells passing donor assignment and all QC filters. |
 | File | unassigned_removed_cells_csv | Cells removed for having no ASAP sample (vireo `doublet`/`unassigned`). |
 | File | filtered_out_cells_csv | Cells removed by `filter`, with a column per filter they failed. Same layout as `unassigned_removed_cells_csv`. |
+| File | mmc_results_csv, mmc_extended_results_json, mmc_log_txt | MapMyCells outputs: per-cell assignments, full results (incl. the marker genes used) and log. |
+| File | mmc_adata_object | `${dataset_id}.${run_id}.mmc.h5ad`; the filtered object with cell type labels. |
+| File | mmc_results_parquet | Per-cell cell type labels. |
 
 ### AnnData contents
 
@@ -201,6 +268,8 @@ Raw counts are in `X`. All genes are kept; no gene filtering is applied.
 | `obs["bc1_well"]`, `obs["bc2_well"]`, `obs["bc3_well"]` | Plate wells for each barcoding round |
 | `obs["sex"]`, `obs["brain_region_level_1"]`–`obs["brain_region_level_3"]` | From ASAP metadata, lower-cased |
 | `obs["batch"]`, `obs["team"]`, `obs["dataset"]`, `obs["batch_id"]` | Run-level metadata; `batch_id` = `${team}_${dataset}_${batch}`, as in sc-rnaseq-wf |
+| `obs["supercluster_name"]`, `obs["cluster_name"]`, `obs["subcluster_name"]`, `obs["rho"]`, `obs["prob"]` | MapMyCells assignment and confidence (cell-typed objects only) |
+| `obs["cell_type"]`, `obs["phenotype"]` | Labels from sc_tools `transcriptional_phenotype`, as in sc-rnaseq-wf (cell-typed objects only) |
 
 
 # Docker images

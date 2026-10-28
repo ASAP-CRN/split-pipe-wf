@@ -20,6 +20,7 @@ struct ParseRun {
     String chemistry
     String batch
     File sample_list_tsv
+    File? sample_map
     Array[Sublibrary] sublibraries
     Array[ParseSample] parse_samples
 }

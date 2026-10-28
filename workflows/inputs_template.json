@@ -1,14 +1,47 @@
 {
-    "split_pipe.dataset_id": "String (The unique identifier for the dataset.)",
-    "split_pipe.sublibraries": "Array[Sublibrary] (sublibrary_id + fastq_R1s + fastq_R2s; one entry per sublibrary)",
-    "split_pipe.genome_name": "String (The name of the reference genome: 'hg38' or 'mm10'",
-    "split_pipe.genome_ref_tar_gz": "File? (optional; prebuilt split-pipe mkref index. Supply to skip make_reference, omit to build one)",
-    "split_pipe.genome_fasta": "File (only used when genome_ref_tar_gz is omitted)",
-    "split_pipe.genes_gtf": "File (only used when genome_ref_tar_gz is omitted)",
-    "split_pipe.chemistry": "String (Parse Bio chemistry versions: v1-v4)",
-    "split_pipe.kit": "String (Parse Bio kit versions: WT_mini, WT, WT_mega, WT_mega_384, WT_penta, WT_penta_384)",
-    "split_pipe.sample_list_tsv": "File (sample name + round-1 wells, one per line)",
-    "split_pipe.parameter_file": "File? (optional; split-pipe --parfile, 'key value' per line)",
-    "split_pipe.container_registry": "String",
-    "split_pipe.zones": "String (optional, default = \"us-central1-c us-central1-f\")"
+    "split_pipe_entrypoint.dataset_id": "String (The unique identifier for the dataset.)",
+    "split_pipe_entrypoint.team_id": "String (ASAP team identifier; used in batch_id.)",
+    "split_pipe_entrypoint.parse_runs": [
+        {
+            "run_id": "String (Parse run ID, e.g. PB-001; used in output names and cell IDs)",
+            "kit": "String (Parse Bio kit: WT_mini, WT, WT_mega, WT_mega_384, WT_penta, WT_penta_384)",
+            "chemistry": "String (Parse Bio chemistry: v1-v4)",
+            "batch": "String (SAMPLE.csv batch value for this run, e.g. Batch1)",
+            "sample_list_tsv": "File (Parse sample name + round-1 wells, one per line)",
+            "sample_map": "File? (optional; parse_sample,subject_id,sample_id; needed when a subject has more than one sample in the run)",
+            "sublibraries": [
+                {
+                    "sublibrary_id": "String (e.g. PB-001-a; list sublibraries in the order vireo was computed on)",
+                    "fastq_R1s": ["File"],
+                    "fastq_R2s": ["File (same order as fastq_R1s)"]
+                }
+            ],
+            "parse_samples": [
+                {
+                    "parse_sample_name": "String (as in sample_list_tsv)",
+                    "vireo_donor_ids": "File? (pooled Parse sample: vireo donor_ids.tsv; set this or subject_id)",
+                    "subject_id": "String? (un-pooled Parse sample: its subject; set this or vireo_donor_ids)"
+                }
+            ]
+        }
+    ],
+    "split_pipe_entrypoint.genome_name": "String (Reference genome name: 'hg38' or 'mm10')",
+    "split_pipe_entrypoint.genome_ref_tar_gz": "File? (optional; prebuilt split-pipe mkref index. Supply to skip make_reference, omit to build one)",
+    "split_pipe_entrypoint.genome_fasta": "File (only used when genome_ref_tar_gz is omitted)",
+    "split_pipe_entrypoint.genes_gtf": "File (only used when genome_ref_tar_gz is omitted)",
+    "split_pipe_entrypoint.parameter_file": "File? (optional; split-pipe --parfile, 'key value' per line)",
+    "split_pipe_entrypoint.sample_csv": "File (ASAP SAMPLE.csv)",
+    "split_pipe_entrypoint.subject_csv": "File (ASAP SUBJECT.csv)",
+    "split_pipe_entrypoint.pct_counts_mt_max": "Int (optional, default = 10)",
+    "split_pipe_entrypoint.doublet_score_max": "Float (optional, default = 0.2)",
+    "split_pipe_entrypoint.total_counts_limits": "Array[Int] (optional, default = [500, 150000])",
+    "split_pipe_entrypoint.n_genes_by_counts_limits": "Array[Int] (optional, default = [300, 15000])",
+    "split_pipe_entrypoint.n_mads_lower": "Float (optional, default = 3)",
+    "split_pipe_entrypoint.n_mads_upper": "Float (optional, default = 5)",
+    "split_pipe_entrypoint.mmc_taxonomy": "String (MapMyCells reference taxonomy, e.g. siletti_20240330)",
+    "split_pipe_entrypoint.allen_brain_mmc_precomputed_stats_h5": "File (MapMyCells precomputed stats for the taxonomy)",
+    "split_pipe_entrypoint.allen_brain_mmc_marker_genes_json": "File? (optional; marker gene lookup, skips on-the-fly markers)",
+    "split_pipe_entrypoint.merge_runs_flag": "Boolean (optional, default = true)",
+    "split_pipe_entrypoint.container_registry": "String",
+    "split_pipe_entrypoint.zones": "String (optional, default = \"us-central1-c us-central1-f\")"
 }
