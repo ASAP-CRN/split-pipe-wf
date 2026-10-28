@@ -103,22 +103,25 @@ workflow split_pipe {
     }
 
     meta {
-        description: "This workflow create the indexed reference genome, runs split-pipe on each sublibrary and combines the results into a single object."
+        description: "This workflow creates the indexed reference genome if it is not provided, runs split-pipe on each sublibrary and combines the results into a single object."
     }
 
     parameter_meta {
         dataset_id: {help: "The unique identifier for the dataset."}
+        run_id: {help: "Parse run ID (e.g. PB-001); used in output names and cell-ID suffixes."}
         sublibraries: {help: "Array of sublibrary structs containing sublibrary IDs and FASTQ file paths."}
         genome_name: {help: "The name of which reference genome is used. Either 'hg38' (human) or 'mm10' (mouse)."}
         genome_ref_tar_gz: {help: "Optional prebuilt split-pipe mkref index (tar.gz). If omitted, one is built from genome_fasta and genes_gtf."}
         genome_fasta: {help: "Path to the reference genome FASTA file."}
         genes_gtf: {help: "Path to the reference gene annotation GTF file."}
-        chemistry: {help: "Chemistry used in the experiment."}
-        kit: {help: "Kit used in the experiment."}
-        sample_list_tsv: {help: "Path to the sample loading table file."}
-        parameter_file: {help: "Optional path to the parameter file."}
-        raw_data_path: {help: "Raw data bucket path for split-pipe sublibrary outputs (`<raw_data_bucket>/workflow_execution/split_pipe/split_pipe_sublibrary/<split_pipe_sublibrary_task_version>`)."}
-        workflow_info: {help: "UTC timestamp, workflow name, workflow version, and GitHub release; stored in the file-level manifest and final manifest with all saved files."}
+        chemistry: {help: "Parse Bio chemistry: v1-v4"}
+        kit: {help: "Parse Bio kit: WT_mini, WT, WT_mega, WT_mega_384, WT_penta, WT_penta_384"}
+        sample_list_tsv: {help: "Parse sample list (--samp_list): one line per sample, '<sample_name> <round-1 wells>', e.g. 'pool_1 A1-B3'. Shared by every sublibrary in the run."}
+        parameter_file: {help: "Optional split-pipe --parfile; 'key value' per line."}
+        raw_data_path: {help: "Raw data bucket path for split-pipe sublibrary outputs."}
+        workflow_version: {help: "Workflow version; stored in the file-level manifest and final manifest with all saved files."}
+        workflow_release: {help: "GitHub release; stored in the file-level manifest and final manifest with all saved files."}
+        run_timestamp: {help: "UTC timestamp; stored in the file-level manifest and final manifest with all saved files."}
         billing_project: {help: "Billing project to charge GCP costs."}
         container_registry: {help: "Container registry where workflow Docker images are hosted."}
         zones: {help: "Space-delimited set of GCP zones to spin up compute in. ['us-central1-c us-central1-f']"}
@@ -179,8 +182,9 @@ task make_reference {
         genome_name: {help: "The name of which reference genome is used. Either 'hg38' (human) or 'mm10' (mouse)."}
         genome_fasta: {help: "Path to the reference genome FASTA file."}
         genes_gtf: {help: "Path to the reference gene annotation GTF file."}
+        container_registry: {help: "Container registry where workflow Docker images are hosted."}
+        zones: {help: "Space-delimited set of GCP zones to spin up compute in. ['us-central1-c us-central1-f']"}
     }
-
 }
 
 
@@ -204,7 +208,7 @@ task split_pipe_sublibrary {
     }
 
     Int threads = 16
-    Int mem_gb = 32  # TODO: Revisit, PB docs bin at 64/128/256 GB
+    Int mem_gb = 32
     Int disk_size = ceil((size(genome_ref_tar_gz, "GB") + (size(flatten([fastq_R1s, fastq_R2s]), "GB")) * 5) + 50 )
 
     # Per sublibrary-specific deliverables - the rest is carried forward in combine_sublibraries
@@ -232,12 +236,15 @@ task split_pipe_sublibrary {
             --no_keep_going \
             ~{if defined(parameter_file) then "--parfile " + select_first([parameter_file]) else ""}
 
-        # TODO: update check when output fully declared
-        if ! ls ~{sublibrary_id}/*/DGE_filtered/count_matrix.mtx >/dev/null 2>&1; then
-            echo "ERROR: split-pipe exited 0 but produced no DGE output" >&2
-            exit 1
-        fi
-        
+        # split-pipe can exit 0 having produced nothing; require DGE output for every listed sample
+        while read -r sample _; do
+            [[ -z "${sample}" ]] && continue
+            if [[ ! -s "~{sublibrary_id}/${sample}/DGE_filtered/count_matrix.mtx" ]]; then
+                echo "ERROR: split-pipe produced no DGE output for sample ${sample}" >&2
+                exit 1
+            fi
+        done < ~{sample_list_tsv}
+
         # Name-sorted, tag-annotated BAM (not needed by comb); moved out so it is not carried in the tarball
         mv ~{sublibrary_id}/process/barcode_headAligned_anno.bam "~{bam_name}"
         cp ~{sublibrary_id}/process/barcode_headLog.final.out "~{star_log_name}"
@@ -249,7 +256,7 @@ task split_pipe_sublibrary {
             -o "~{bam_name}" \
             -o "~{star_log_name}"
 
-        tar -czf ~{dataset_id}.~{sublibrary_id}.tar.gz ~{sublibrary_id}        
+        tar -czf ~{dataset_id}.~{sublibrary_id}.tar.gz ~{sublibrary_id}
     >>>
 
     output {
@@ -270,17 +277,17 @@ task split_pipe_sublibrary {
         description: "Run split-pipe on mode: 'all' for the given sublibrary."
     }
 
-    # TODO: add options
     parameter_meta {
         dataset_id: {help: "The unique identifier for the dataset."}
         sublibrary_id: {help: "Identifier for the sublibrary being processed."}
-        chemistry: {help: "Chemistry used for the sublibrary."}
-        kit: {help: "Kit used for the sublibrary."}
+        genome_ref_tar_gz: {help: "split-pipe mkref index (tar.gz), from make_reference or supplied to the workflow."}
+        chemistry: {help: "Parse Bio chemistry: v1-v4"}
+        kit: {help: "Parse Bio kit: WT_mini, WT, WT_mega, WT_mega_384, WT_penta, WT_penta_384"}
         fastq_R1s: {help: "Array of FASTQ files for read 1."}
         fastq_R2s: {help: "Array of FASTQ files for read 2."}
-        sample_list_tsv: {help: "Path to the sample table file."}
-        parameter_file: {help: "Optional path to the parameter file."}
-        raw_data_path: {help: "Raw data bucket path for split-pipe sublibrary outputs (`<raw_data_bucket>/workflow_execution/split_pipe/split_pipe_sublibrary/<split_pipe_sublibrary_task_version>`)."}
+        sample_list_tsv: {help: "Parse sample list (--samp_list): one line per sample, '<sample_name> <round-1 wells>', e.g. 'pool_1 A1-B3'. Shared by every sublibrary in the run."}
+        parameter_file: {help: "Optional split-pipe --parfile; 'key value' per line."}
+        raw_data_path: {help: "Raw data bucket path for split-pipe sublibrary outputs."}
         workflow_info: {help: "UTC timestamp, workflow name, workflow version, and GitHub release; stored in the file-level manifest and final manifest with all saved files."}
         billing_project: {help: "Billing project to charge GCP costs."}
         container_registry: {help: "Container registry where workflow Docker images are hosted."}
@@ -309,7 +316,7 @@ task combine_sublibraries {
     String comb_tar_gz = "~{comb_name}.tar.gz"
     
     Int threads = 16
-    Int mem_gb = 48  # TODO: revisit if too generous
+    Int mem_gb = 48  # TODO: 6.6 GB peak RSS for 2 PB-001 sublibraries; PB-002 has 16
     Int disk_size = ceil((size(sublibrary_tars, "GB") * 8) + (size(genome_ref_tar_gz, "GB") * 3) + 50)
 
     command <<<
@@ -322,10 +329,8 @@ task combine_sublibraries {
 
         # Extract each sublibrary .tar.gz into sublibs/
         mkdir -p sublibs
-        ids_array=(~{sep=" " sublibrary_ids})
-        tars_array=(~{sep=" " sublibrary_tars})
-        for i in "${!tars_array[@]}"; do
-            tar -xzf "${tars_array[$i]}" -C sublibs
+        for sublib_tar in ~{sep=" " sublibrary_tars}; do
+            tar -xzf "${sublib_tar}" -C sublibs
         done
 
         split-pipe \
@@ -334,6 +339,12 @@ task combine_sublibraries {
             --sublib_pref "$PWD/sublibs/" \
             --output_dir combined_sublibs \
             --nthreads ~{threads}
+
+        # split-pipe can exit 0 having produced nothing
+        if [[ ! -s combined_sublibs/all-sample/DGE_filtered/count_matrix.mtx ]]; then
+            echo "ERROR: split-pipe comb produced no DGE output" >&2
+            exit 1
+        fi
 
         # Copy the summary reports to view alongside the compressed output
         cp combined_sublibs/all-sample_analysis_summary.html "~{comb_name}.all-sample_analysis_summary.html"
@@ -358,7 +369,7 @@ task combine_sublibraries {
         cpu: threads
         memory: "~{mem_gb} GB"
         disks: "local-disk ~{disk_size} SSD"
-        preemptible: 0
+        preemptible: 3
         zones: zones
     }
 
@@ -369,9 +380,10 @@ task combine_sublibraries {
     parameter_meta {
         dataset_id: {help: "The unique identifier for the dataset."}
         run_id: {help: "Parse run ID (e.g. PB-001); used in output names and cell-ID suffixes."}
+        genome_ref_tar_gz: {help: "split-pipe mkref index (tar.gz), from make_reference or supplied to the workflow."}
         sublibrary_tars: {help: "Array of sublibrary tar.gz files to be combined."}
         sublibrary_ids: {help: "Array of sublibrary identifiers corresponding to the tar.gz files."}
-        raw_data_path: {help: "Raw data bucket path for split-pipe sublibrary outputs (`<raw_data_bucket>/workflow_execution/split_pipe/split_pipe_sublibrary/<split_pipe_sublibrary_task_version>`)."}
+        raw_data_path: {help: "Raw data bucket path for split-pipe sublibrary outputs."}
         workflow_info: {help: "UTC timestamp, workflow name, workflow version, and GitHub release; stored in the file-level manifest and final manifest with all saved files."}
         billing_project: {help: "Billing project to charge GCP costs."}
         container_registry: {help: "Container registry where workflow Docker images are hosted."}
