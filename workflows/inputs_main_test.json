@@ -1,13 +1,13 @@
 {
-    "split_pipe_entrypoint.dataset_id": "team-voet-pmdbs-sn-rnaseq-parsebio",
-    "split_pipe_entrypoint.team_id": "Team-Voet",
-    "split_pipe_entrypoint.genome_name": "hg38",
-    "split_pipe_entrypoint.genome_ref_tar_gz": "gs://asap-workflow-dev/split_pipe_dev/split_pipe_1.8.2.hg38.refdata-gex-GRCh38-2024-A.genome_ref.tar.gz",
-    "split_pipe_entrypoint.genome_fasta": "gs://asap-workflow-dev/split_pipe_dev/refdata-gex-GRCh38-2024-A.genome.fa",
-    "split_pipe_entrypoint.genes_gtf": "gs://asap-workflow-dev/split_pipe_dev/refdata-gex-GRCh38-2024-A.genes.gtf.gz",
-    "split_pipe_entrypoint.sample_csv": "gs://asap-workflow-dev/split_pipe_dev/SAMPLE.csv",
-    "split_pipe_entrypoint.subject_csv": "gs://asap-workflow-dev/split_pipe_dev/SUBJECT.csv",
-    "split_pipe_entrypoint.parse_runs": [
+    "split_pipe_analysis.dataset_id": "team-voet-pmdbs-sn-rnaseq-parsebio",
+    "split_pipe_analysis.team_id": "Team-Voet",
+    "split_pipe_analysis.genome_name": "hg38",
+    "split_pipe_analysis.genome_ref_tar_gz": "gs://asap-workflow-dev/split_pipe_dev/split_pipe_1.8.2.hg38.refdata-gex-GRCh38-2024-A.genome_ref.tar.gz",
+    "split_pipe_analysis.genome_fasta": "gs://asap-workflow-dev/split_pipe_dev/refdata-gex-GRCh38-2024-A.genome.fa",
+    "split_pipe_analysis.genes_gtf": "gs://asap-workflow-dev/split_pipe_dev/refdata-gex-GRCh38-2024-A.genes.gtf.gz",
+    "split_pipe_analysis.sample_csv": "gs://asap-workflow-dev/split_pipe_dev/SAMPLE.csv",
+    "split_pipe_analysis.subject_csv": "gs://asap-workflow-dev/split_pipe_dev/SUBJECT.csv",
+    "split_pipe_analysis.parse_runs": [
         {
             "run_id": "PB-001",
             "kit": "WT",
@@ -148,20 +148,20 @@
             ]
         }
     ],
-    "split_pipe_entrypoint.pct_counts_mt_max": 10,
-    "split_pipe_entrypoint.doublet_score_max": 0.2,
-    "split_pipe_entrypoint.total_counts_limits": [
+    "split_pipe_analysis.pct_counts_mt_max": 10,
+    "split_pipe_analysis.doublet_score_max": 0.2,
+    "split_pipe_analysis.total_counts_limits": [
         500,
         150000
     ],
-    "split_pipe_entrypoint.n_genes_by_counts_limits": [
+    "split_pipe_analysis.n_genes_by_counts_limits": [
         300,
         15000
     ],
-    "split_pipe_entrypoint.n_mads_lower": 3,
-    "split_pipe_entrypoint.n_mads_upper": 5,
-    "split_pipe_entrypoint.mmc_taxonomy": "siletti_20240330",
-    "split_pipe_entrypoint.allen_brain_mmc_precomputed_stats_h5": "gs://asap-workflow-dev/workflow-resources/precomputed_stats.siletti.training.h5",
-    "split_pipe_entrypoint.container_registry": "us-central1-docker.pkg.dev/dnastack-asap-parkinsons/workflow-images",
-    "split_pipe_entrypoint.zones": "us-central1-c us-central1-f"
+    "split_pipe_analysis.n_mads_lower": 3,
+    "split_pipe_analysis.n_mads_upper": 5,
+    "split_pipe_analysis.mmc_taxonomy": "siletti_20240330",
+    "split_pipe_analysis.allen_brain_mmc_precomputed_stats_h5": "gs://asap-workflow-dev/workflow-resources/precomputed_stats.siletti.training.h5",
+    "split_pipe_analysis.container_registry": "us-central1-docker.pkg.dev/dnastack-asap-parkinsons/workflow-images",
+    "split_pipe_analysis.zones": "us-central1-c us-central1-f"
 }
