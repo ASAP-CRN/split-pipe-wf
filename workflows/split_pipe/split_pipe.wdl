@@ -69,7 +69,6 @@ workflow split_pipe {
                 fastq_R2s = sublibrary.fastq_R2s,
                 sample_list_tsv = sample_list_tsv,
                 parameter_file = parameter_file,
-                
                 raw_data_path = raw_data_path,
                 workflow_info = workflow_info,
                 billing_project = billing_project,
@@ -96,10 +95,11 @@ workflow split_pipe {
     }
 
     output {
-        Array[String] sublibrary_bams = split_pipe_sublibrary.bam
-        Array[String] sublibrary_star_logs = split_pipe_sublibrary.star_log
+        Array[File] sublibrary_bams = split_pipe_sublibrary.bam #!FileCoercion
+        Array[File] sublibrary_star_logs = split_pipe_sublibrary.star_log #!FileCoercion
         File combined_sublibs_tar_gz = combine_sublibraries.combined_sublibs_tar_gz #!FileCoercion
-
+        File all_sample_summary_html = combine_sublibraries.all_sample_summary_html #!FileCoercion
+        File agg_sample_summary_csv = combine_sublibraries.agg_sample_summary_csv #!FileCoercion
     }
 
     meta {
@@ -303,7 +303,7 @@ task combine_sublibraries {
         File genome_ref_tar_gz
         Array[File] sublibrary_tars
         Array[String] sublibrary_ids
-        
+
         String raw_data_path
         Array[Array[String]] workflow_info
         String billing_project
@@ -362,6 +362,8 @@ task combine_sublibraries {
 
     output {
         String combined_sublibs_tar_gz = "~{raw_data_path}/~{comb_tar_gz}"
+        String all_sample_summary_html = "~{raw_data_path}/~{comb_name}.all-sample_analysis_summary.html"
+        String agg_sample_summary_csv = "~{raw_data_path}/~{comb_name}.agg_sample_summary.csv"
     }
 
     runtime {

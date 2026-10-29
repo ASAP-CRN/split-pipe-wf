@@ -222,7 +222,7 @@ task prep_parse_sample {
     >>>
 
     output {
-        File prepped_adata = adata_out
+        File prepped_adata = adata_out  # Passed to merge_and_plot_qc_metrics, not uploaded b/c it becomes part of the merged dataset
     }
 
     runtime {
@@ -361,7 +361,7 @@ task filter {
         String zones
     }
 
-    Int calc_mem_gb = ceil(size(merged_adata_object, "GB") * 6 + 8)
+    Int mem_gb = ceil(size(merged_adata_object, "GB") * 6 + 8)
     Int disk_size = ceil(size(merged_adata_object, "GB") * 4 + 20)
 
     command <<<
@@ -394,7 +394,7 @@ task filter {
     >>>
 
     output {
-        File filtered_adata_object = "~{output_prefix}.filtered.h5ad"
+        File filtered_adata_object = "~{output_prefix}.filtered.h5ad"  # Passed to MMC, not uploaded b/c it is an intermediate file
         String unassigned_removed_cells_csv = "~{raw_data_path}/~{output_prefix}.unassigned_removed_cells.csv"
         String filtered_out_cells_csv = "~{raw_data_path}/~{output_prefix}.filtered_out_cells.csv"
     }
@@ -538,7 +538,7 @@ task add_mapped_cell_types {
     # "pmdbs_sc_rnaseq" selects the human branch, currently the only supported in this workflow.
     String sc_tools_workflow_name = "pmdbs_sc_rnaseq"
 
-    Int calc_mem_gb = ceil(size(filtered_adata_object, "GB") * 4 + 8)
+    Int mem_gb = ceil(size(filtered_adata_object, "GB") * 4 + 8)
     Int disk_size = ceil(size(filtered_adata_object, "GB") * 4 + 20)
 
     command <<<
@@ -560,7 +560,7 @@ task add_mapped_cell_types {
     >>>
 
     output {
-        File mmc_adata_object = "~{output_prefix}.mmc.h5ad"
+        File mmc_adata_object = "~{output_prefix}.mmc.h5ad"  # Not uploaded b/c it is an intermediate file for merge_runs
         String mmc_results_parquet = "~{raw_data_path}/~{output_prefix}.mmc_results.parquet"
     }
 
