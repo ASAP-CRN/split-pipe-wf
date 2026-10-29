@@ -3,10 +3,11 @@ version 1.0
 # split-pipe scRNA-seq workflow entrypoint
 
 import "structs.wdl"
+import "../wf-common/wdl/tasks/get_workflow_metadata.wdl" as GetWorkflowMetadata
 import "split_pipe/split_pipe.wdl" as SplitPipe
 import "postprocess/postprocess.wdl" as PostProcess
 
-workflow split_pipe_entrypoint {
+workflow split_pipe_analysis {
     input {
         String dataset_id
         String team_id
@@ -38,10 +39,22 @@ workflow split_pipe_entrypoint {
         File allen_brain_mmc_precomputed_stats_h5
         File? allen_brain_mmc_marker_genes_json
         
+        String raw_data_path
         String container_registry
         String zones = "us-central1-c us-central1-f"
     }
-    
+
+    String workflow_name = "pmdbs_split_pipe"
+    String workflow_execution_path = "workflow_execution"
+    String workflow_version = "v1.0.0"
+    String workflow_release = "https://github.com/ASAP-CRN/split-pipe-wf/releases/tag/split_pipe_analysis-~{workflow_version}"
+    String crn_release_version = "v6.0.0"
+
+    call GetWorkflowMetadata.get_workflow_metadata {
+        input:
+            zones = zones
+    }
+
     # Build once outside of the per-run scatter so split_pipe skips its own make_reference
     if (!defined(genome_ref_tar_gz)) {
         call SplitPipe.make_reference {
@@ -60,6 +73,7 @@ workflow split_pipe_entrypoint {
         call SplitPipe.split_pipe {
             input:
                 dataset_id = dataset_id,
+                run_id = run.run_id,
                 sublibraries = run.sublibraries,
                 genome_name = genome_name,
                 genome_ref_tar_gz = genome_ref,
@@ -69,6 +83,12 @@ workflow split_pipe_entrypoint {
                 kit = run.kit,
                 sample_list_tsv = run.sample_list_tsv,
                 parameter_file = parameter_file,
+                workflow_name = workflow_name,
+                workflow_version = workflow_version,
+                workflow_release = workflow_release,
+                run_timestamp = get_workflow_metadata.timestamp,
+                raw_data_path = raw_data_path,
+                billing_project = get_workflow_metadata.billing_project,
                 container_registry = container_registry,
                 zones = zones
         }
@@ -93,21 +113,51 @@ workflow split_pipe_entrypoint {
                 mmc_taxonomy = mmc_taxonomy,
                 allen_brain_mmc_precomputed_stats_h5 = allen_brain_mmc_precomputed_stats_h5,
                 allen_brain_mmc_marker_genes_json = allen_brain_mmc_marker_genes_json,
+                workflow_name = workflow_name,
+                workflow_version = workflow_version,
+                workflow_release = workflow_release,
+                run_timestamp = get_workflow_metadata.timestamp,
+                raw_data_path = raw_data_path,
+                billing_project = get_workflow_metadata.billing_project,
                 container_registry = container_registry,
                 zones = zones
         }
     }
 
+    Array[Array[String]] workflow_info = [[get_workflow_metadata.timestamp, workflow_name, workflow_version, workflow_release]]
+    
     call merge_runs {
         input:
             cleaned_run_adata_objects = postprocess.mmc_adata_object,
             dataset_id = dataset_id,
+            raw_data_path = raw_data_path,
+            workflow_info = workflow_info,
+            billing_project = get_workflow_metadata.billing_project,
             container_registry = container_registry,
             zones = zones
     }
 
     output {
-        File final_merged_adata = merge_runs.merged_adata_object
+        # split-pipe
+        Array[Array[File]] sublibrary_bams = split_pipe.sublibrary_bams
+        Array[Array[File]] sublibrary_star_logs = split_pipe.sublibrary_star_logs
+        Array[File] combined_sublibs_tar_gz = split_pipe.combined_sublibs_tar_gz
+        Array[File] all_sample_summary_html = split_pipe.all_sample_summary_html
+        Array[File] agg_sample_summary_csv = split_pipe.agg_sample_summary_csv
+        # postprocess
+        Array[File] merged_adata = postprocess.merged_adata #!FileCoercion
+        Array[File] initial_metadata = postprocess.initial_metadata #!FileCoercion
+        Array[Array[File]] qc_plots = postprocess.qc_plots #!FileCoercion
+        Array[File] filtered_adata_object = postprocess.filtered_adata_object
+        Array[File] unassigned_removed_cells_csv = postprocess.unassigned_removed_cells_csv #!FileCoercion
+        Array[File] filtered_out_cells_csv = postprocess.filtered_out_cells_csv #!FileCoercion
+        Array[File] mmc_extended_results_json = postprocess.mmc_extended_results_json #!FileCoercion
+        Array[File] mmc_results_csv = postprocess.mmc_results_csv #!FileCoercion
+        Array[File] mmc_log_txt = postprocess.mmc_log_txt #!FileCoercion
+        Array[File] mmc_adata_object = postprocess.mmc_adata_object
+        Array[File] mmc_results_parquet = postprocess.mmc_results_parquet #!FileCoercion
+        # merged runs
+        File final_merged_adata = merge_runs.merged_adata_object #!FileCoercion
     }
 
     meta {
@@ -144,9 +194,15 @@ task merge_runs {
     input {
         Array[File] cleaned_run_adata_objects
         String dataset_id
+
+        String raw_data_path
+        Array[Array[String]] workflow_info
+        String billing_project
         String container_registry
         String zones
     }
+
+    String merged_adata_name = "~{dataset_id}.merged.mmc.h5ad"
 
     Int mem_gb = ceil(size(cleaned_run_adata_objects, "GB") * 6 + 20)
     Int disk_size = ceil(size(cleaned_run_adata_objects, "GB") * 3 + 50)
@@ -156,15 +212,21 @@ task merge_runs {
         
         merge_runs.py \
             --adata-inputs ~{sep=' ' cleaned_run_adata_objects} \
-            --adata-output ~{dataset_id}.merged.mmc.h5ad
+            --adata-output ~{merged_adata_name}
+
+        upload_outputs \
+            -b ~{billing_project} \
+            -d ~{raw_data_path} \
+            -i ~{write_tsv(workflow_info)} \
+            -o ~{merged_adata_name}
     >>>
     
     output {
-        File merged_adata_object = "~{dataset_id}.merged.mmc.h5ad"
+        String merged_adata_object = "~{raw_data_path}/~{merged_adata_name}"
     }
 
     runtime {
-        docker: "~{container_registry}/parsebio_tools:0.3.1"
+        docker: "~{container_registry}/parsebio_tools:0.3.2"
         cpu: 4
         memory: "~{mem_gb} GB"
         disks: "local-disk ~{disk_size} SSD"
@@ -180,6 +242,9 @@ task merge_runs {
     parameter_meta {
         cleaned_run_adata_objects: {help: "An array of cleaned run-level Parse Bio AnnData objects to merge."}
         dataset_id: {help: "The unique identifier for the dataset; used to name the output."}
+        raw_data_path: {help: "Raw data bucket path for the merged run outputs."}
+        workflow_info: {help: "UTC timestamp, workflow name, workflow version, and GitHub release; stored in the file-level manifest and final manifest with all saved files."}
+        billing_project: {help: "Billing project to charge GCP costs."}
         container_registry: {help: "Container registry where workflow Docker images are hosted."}
         zones: {help: "Space-delimited set of GCP zones to spin up compute in. ['us-central1-c us-central1-f']"}
     }
