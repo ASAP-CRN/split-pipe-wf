@@ -372,7 +372,6 @@ task combine_sublibraries {
         cpu: threads
         memory: "~{mem_gb} GB"
         disks: "local-disk ~{disk_size} SSD"
-        preemptible: 3
         zones: zones
     }
 

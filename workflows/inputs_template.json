@@ -11,7 +11,7 @@
             "sample_map": "File? (optional; parse_sample,subject_id,sample_id; needed when a subject has more than one sample in the run)",
             "sublibraries": [
                 {
-                    "sublibrary_id": "String (e.g. PB-001-a; list sublibraries in the order vireo was computed on)",
+                    "sublibrary_id": "String (e.g. PB-001a; list sublibraries in the order vireo was computed on)",
                     "fastq_R1s": [
                         "File"
                     ],
@@ -46,6 +46,7 @@
     "split_pipe_analysis.allen_brain_mmc_precomputed_stats_h5": "File (MapMyCells precomputed stats for the taxonomy)",
     "split_pipe_analysis.allen_brain_mmc_marker_genes_json": "File? (optional; marker gene lookup, skips on-the-fly markers)",
     "split_pipe_analysis.raw_data_bucket": "String (dataset raw data bucket, e.g. gs://asap-raw-team-voet-pmdbs-sn-rnaseq-parsebio; outputs go under workflow_execution/<workflow_name>/)",
+    "split_pipe_analysis.staging_data_buckets": ["String (staging bucket(s) for final outputs, e.g. gs://asap-dev-team-voet-pmdbs-sn-rnaseq-parsebio)"],
     "split_pipe_analysis.container_registry": "String",
     "split_pipe_analysis.zones": "String (optional, default = \"us-central1-c us-central1-f\")"
 }

@@ -131,7 +131,7 @@ workflow split_pipe_analysis {
 
     Array[Array[String]] workflow_info = [[get_workflow_metadata.timestamp, workflow_name, workflow_version, workflow_release]]
     # Put merged output in postprocess dir - each run has same path so just select the first
-    String postprocess_raw_path = postprocess.postprocess_raw_data_path[0] 
+    String postprocess_raw_path = postprocess.postprocess_raw_data_path[0]
 
     call merge_runs {
         input:
@@ -196,17 +196,17 @@ workflow split_pipe_analysis {
         Array[File] agg_sample_summary_csv = split_pipe.agg_sample_summary_csv
         # Postprocess
         Array[Array[File]] prepped_adata = postprocess.prepped_adata
-        Array[File] merged_adata = postprocess.merged_adata #!FileCoercion
-        Array[File] initial_metadata = postprocess.initial_metadata #!FileCoercion
-        Array[Array[File]] qc_plots = postprocess.qc_plots #!FileCoercion
+        Array[File] merged_adata = postprocess.merged_adata
+        Array[File] initial_metadata = postprocess.initial_metadata
+        Array[Array[File]] qc_plots = postprocess.qc_plots
         Array[File] filtered_adata_object = postprocess.filtered_adata_object
-        Array[File] unassigned_removed_cells_csv = postprocess.unassigned_removed_cells_csv #!FileCoercion
-        Array[File] filtered_out_cells_csv = postprocess.filtered_out_cells_csv #!FileCoercion
-        Array[File] mmc_extended_results_json = postprocess.mmc_extended_results_json #!FileCoercion
-        Array[File] mmc_results_csv = postprocess.mmc_results_csv #!FileCoercion
-        Array[File] mmc_log_txt = postprocess.mmc_log_txt #!FileCoercion
+        Array[File] unassigned_removed_cells_csv = postprocess.unassigned_removed_cells_csv
+        Array[File] filtered_out_cells_csv = postprocess.filtered_out_cells_csv
+        Array[File] mmc_extended_results_json = postprocess.mmc_extended_results_json
+        Array[File] mmc_results_csv = postprocess.mmc_results_csv
+        Array[File] mmc_log_txt = postprocess.mmc_log_txt
         Array[File] mmc_adata_object = postprocess.mmc_adata_object
-        Array[File] mmc_results_parquet = postprocess.mmc_results_parquet #!FileCoercion
+        Array[File] mmc_results_parquet = postprocess.mmc_results_parquet
         # Merged runs
         File final_merged_adata = merge_runs.merged_run_adata_object #!FileCoercion
         # Staging manifests
@@ -226,7 +226,7 @@ workflow split_pipe_analysis {
         genome_fasta: {help: "Path to the reference genome FASTA file."}
         genes_gtf: {help: "Path to the reference gene annotation GTF file."}
         genome_ref_tar_gz: {help: "Optional prebuilt split-pipe mkref index (tar.gz). If omitted, one is built from genome_fasta and genes_gtf."}
-        parameter_file: {help: "Optional path to the parameter file."}
+        parameter_file: {help: "Optional split-pipe --parfile; 'key value' per line."}
         sample_csv: {help: "ASAP SAMPLE.csv."}
         subject_csv: {help: "ASAP SUBJECT.csv."}
         pct_counts_mt_max: {help: "Maximum percentage of mitochondrial gene counts allowed per cell. [10]"}
@@ -239,7 +239,7 @@ workflow split_pipe_analysis {
         allen_brain_mmc_precomputed_stats_h5: {help: "A precomputed statistics file from the Allen Brain Cell Atlas containing reference statistics (the average gene expression profile per cell type cluster and cell type taxonomy)."}
         allen_brain_mmc_marker_genes_json: {help: "Optional marker gene lookup (parent node -> marker genes), e.g. extracted from a previous run's extended_results.json. If provided, skips on-the-fly marker computation."}
         raw_data_bucket: {help: "Dataset raw data bucket (e.g. gs://asap-raw-team-voet-pmdbs-sn-rnaseq-parsebio); outputs are uploaded under `<raw_data_bucket>/workflow_execution/<workflow_name>/`."}
-        staging_data_buckets: {help: "Set of staging buckets  (dev and uat) for uploading workflow outputs."}
+        staging_data_buckets: {help: "Set of staging buckets (dev and uat) for uploading workflow outputs."}
         container_registry: {help: "Container registry where workflow Docker images are hosted."}
         zones: {help: "Space-delimited set of GCP zones to spin up compute in. ['us-central1-c us-central1-f']"}
     }
@@ -266,6 +266,7 @@ task merge_runs {
     command <<<
         set -euo pipefail
         
+        /usr/bin/time -v \
         merge_runs.py \
             --adata-inputs ~{sep=' ' cleaned_run_adata_objects} \
             --adata-output ~{merged_run_adata_name}
