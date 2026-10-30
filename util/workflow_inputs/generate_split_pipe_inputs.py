@@ -1,5 +1,43 @@
 #!/usr/bin/env python3
 
+"""
+Generate the input JSON files required for running the split-pipe workflow, based
+on the provided SAMPLE.csv, DATA.csv, and parse samples TSV files. 
+
+This is currently tailored to the single released Parse Bio dataset (team-voet-pmdbs-sn-rnaseq-parsebio):
+- Two sequencing kits/runs were used (PB-001 and PB-002) - run identifiers must 
+  be tracked for merging into one final dataset.
+- A Parse Bio run pools all samples/cells after barcoding - these are then split
+  into sublibraries (identified by pool_id) for sequencing.
+- The provided pool_id are of the form PB001a, where PB-001 is the run and PB-001a 
+  is the sublibrary.
+- This dataset also pools donors, requiring vireo de-multiplexing.
+- These donor pools correspond to a "Parse sample" - what was initially aliquoted
+  into the plate wells before barcoding/pooling.
+- The exception is ASA_063B, which was not pooled and thus is its own "Parse sample."
+- The sublibaries in the input *must* be specified in alphabetical order to be
+  consistent with the provided vireo tables.
+
+- Example:
+    - Run: PB-001 [contains 4 Parse samples encompassing 16 donors,  split into 8 sublibraries]
+    - Parse sample: pool_1 [contains donors ASA_004, ASA_005, ASA_006, ASA_041, ASA_042]
+    - Sublibrary: PB-001a [FASTQs contain a proportion of cells from ALL donors in PB-001]
+    
+- This requires multiple tables to track these relationships:
+    - Parse sample list (PB-001_sample_list.tsv): this tracks which Parse samples are
+      present in each run's plate - necessary for split-pipe to resolve barcoding.
+    - Vireo files (PB-001-pool_1.tsv): This associates each barcoded cell from a 
+      Parse sample to its constituent donors, enabling donor de-multiplexing.
+    - SAMPLE, SUBJECT, DATA: ASAP metadata tables that link samples to their FASTQs.
+    - Sample map (PB-002_sample_map.csv): When a subject contributes more than one
+      sample within a run (as in PB-002), this is needed to resolve the mapping
+      from vireo since vireo only provides the donor/subject_id (i.e, ASA_004 not
+      ASA_004A).
+    - split_pipe_runs.tsv: used by this script to track Parse sample lists per run.
+    - split_pipe_parse_samples.tsv: used by this script to associate vireo files
+      (or the single donor ASA_063) to each Parse sample within a run.
+"""
+
 from datetime import datetime
 from argparse import ArgumentParser
 import pandas as pd
@@ -12,13 +50,13 @@ date = today.strftime("%Y-%m-%d")
 
 WORKFLOW_NAME = "split_pipe_analysis"
 
-# SAMPLE.csv protocol_id -> split-pipe (--kit, --chemistry); add new protocols here as they appear
+# Getting split-pipe --kit and --chemistry from SAMPLE.csv protocol_id
 PROTOCOL_KIT_CHEMISTRY = {
     "Evercode_WT_v1": ("WT", "v1"),
     "Evercode_WT_MEGA_v1": ("WT_mega", "v1"),
 }
 
-# DATA.csv pool_id is the sublibrary, e.g. PB001a -> run PB-001, sublibrary PB-001a
+# pool_id is the sublibrary, e.g. PB001a -> run PB-001, sublibrary PB-001a
 POOL_ID_PATTERN = re.compile(r"^([A-Za-z]+)(\d+)([a-z]+)$")
 
 
