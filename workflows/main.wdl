@@ -4,6 +4,7 @@ version 1.0
 
 import "structs.wdl"
 import "../wf-common/wdl/tasks/get_workflow_metadata.wdl" as GetWorkflowMetadata
+import "../wf-common/wdl/tasks/upload_final_outputs.wdl" as UploadFinalOutputs
 import "split_pipe/split_pipe.wdl" as SplitPipe
 import "postprocess/postprocess.wdl" as PostProcess
 
@@ -39,7 +40,8 @@ workflow split_pipe_analysis {
         File allen_brain_mmc_precomputed_stats_h5
         File? allen_brain_mmc_marker_genes_json
         
-        String raw_data_path
+        String raw_data_bucket
+        Array[String] staging_data_buckets
         String container_registry
         String zones = "us-central1-c us-central1-f"
     }
@@ -49,6 +51,9 @@ workflow split_pipe_analysis {
     String workflow_version = "v1.0.0"
     String workflow_release = "https://github.com/ASAP-CRN/split-pipe-wf/releases/tag/split_pipe_analysis-~{workflow_version}"
     String crn_release_version = "v6.0.0"
+    String raw_data_path_prefix = "~{raw_data_bucket}/~{workflow_execution_path}/~{workflow_name}"
+    String staging_path_prefix = "~{workflow_name}/release/~{crn_release_version}"
+
 
     call GetWorkflowMetadata.get_workflow_metadata {
         input:
@@ -87,7 +92,7 @@ workflow split_pipe_analysis {
                 workflow_version = workflow_version,
                 workflow_release = workflow_release,
                 run_timestamp = get_workflow_metadata.timestamp,
-                raw_data_path = raw_data_path,
+                raw_data_path_prefix = raw_data_path_prefix,
                 billing_project = get_workflow_metadata.billing_project,
                 container_registry = container_registry,
                 zones = zones
@@ -117,7 +122,7 @@ workflow split_pipe_analysis {
                 workflow_version = workflow_version,
                 workflow_release = workflow_release,
                 run_timestamp = get_workflow_metadata.timestamp,
-                raw_data_path = raw_data_path,
+                raw_data_path_prefix = raw_data_path_prefix,
                 billing_project = get_workflow_metadata.billing_project,
                 container_registry = container_registry,
                 zones = zones
@@ -125,26 +130,72 @@ workflow split_pipe_analysis {
     }
 
     Array[Array[String]] workflow_info = [[get_workflow_metadata.timestamp, workflow_name, workflow_version, workflow_release]]
-    
+    # Put merged output in postprocess dir - each run has same path so just select the first
+    String postprocess_raw_path = postprocess.postprocess_raw_data_path[0] 
+
     call merge_runs {
         input:
             cleaned_run_adata_objects = postprocess.mmc_adata_object,
             dataset_id = dataset_id,
-            raw_data_path = raw_data_path,
+            raw_data_path = postprocess_raw_path,
             workflow_info = workflow_info,
             billing_project = get_workflow_metadata.billing_project,
             container_registry = container_registry,
             zones = zones
     }
 
+    # Uploaded outputs into staging
+    Array[String] split_pipe_final_output_paths = flatten([
+        flatten(split_pipe.sublibrary_bams),
+        flatten(split_pipe.sublibrary_star_logs),
+        split_pipe.combined_sublibs_tar_gz,
+        split_pipe.all_sample_summary_html,
+        split_pipe.agg_sample_summary_csv
+    ]) #!StringCoercion
+
+    Array[String] postprocess_final_output_paths = flatten([
+        postprocess.merged_adata,
+        postprocess.initial_metadata,
+        flatten(postprocess.qc_plots),
+        postprocess.unassigned_removed_cells_csv,
+        postprocess.filtered_out_cells_csv,
+        postprocess.mmc_extended_results_json,
+        postprocess.mmc_results_csv,
+        postprocess.mmc_log_txt,
+        postprocess.mmc_results_parquet,
+        [merge_runs.merged_run_adata_object]
+    ]) #!StringCoercion
+
+    call UploadFinalOutputs.upload_final_outputs as upload_split_pipe_files {
+        input:
+            output_file_paths = split_pipe_final_output_paths,
+            staging_data_buckets = staging_data_buckets,
+            staging_data_path = "~{staging_path_prefix}/split_pipe",
+            billing_project = get_workflow_metadata.billing_project,
+            zones = zones
+    }
+
+    call UploadFinalOutputs.upload_final_outputs as upload_postprocess_files {
+        input:
+            output_file_paths = postprocess_final_output_paths,
+            staging_data_buckets = staging_data_buckets,
+            staging_data_path = "~{staging_path_prefix}/postprocess",
+            billing_project = get_workflow_metadata.billing_project,
+            zones = zones
+    }
+
     output {
-        # split-pipe
+        # Reference - pass back as genome_ref_tar_gz to skip make_reference in later submissions
+        File genome_ref_tar_gz_used = genome_ref
+        # Split-pipe
+        Array[Array[File]] sublibrary_tar_gz = split_pipe.sublibrary_tar_gz
         Array[Array[File]] sublibrary_bams = split_pipe.sublibrary_bams
         Array[Array[File]] sublibrary_star_logs = split_pipe.sublibrary_star_logs
         Array[File] combined_sublibs_tar_gz = split_pipe.combined_sublibs_tar_gz
         Array[File] all_sample_summary_html = split_pipe.all_sample_summary_html
         Array[File] agg_sample_summary_csv = split_pipe.agg_sample_summary_csv
-        # postprocess
+        # Postprocess
+        Array[Array[File]] prepped_adata = postprocess.prepped_adata
         Array[File] merged_adata = postprocess.merged_adata #!FileCoercion
         Array[File] initial_metadata = postprocess.initial_metadata #!FileCoercion
         Array[Array[File]] qc_plots = postprocess.qc_plots #!FileCoercion
@@ -156,8 +207,11 @@ workflow split_pipe_analysis {
         Array[File] mmc_log_txt = postprocess.mmc_log_txt #!FileCoercion
         Array[File] mmc_adata_object = postprocess.mmc_adata_object
         Array[File] mmc_results_parquet = postprocess.mmc_results_parquet #!FileCoercion
-        # merged runs
-        File final_merged_adata = merge_runs.merged_adata_object #!FileCoercion
+        # Merged runs
+        File final_merged_adata = merge_runs.merged_run_adata_object #!FileCoercion
+        # Staging manifests
+        Array[File] split_pipe_manifest_tsvs = upload_split_pipe_files.manifests #!FileCoercion
+        Array[File] postprocess_manifest_tsvs = upload_postprocess_files.manifests #!FileCoercion
     }
 
     meta {
@@ -184,6 +238,8 @@ workflow split_pipe_analysis {
         mmc_taxonomy: {help: "Cell type taxonomy of the precomputed stats reference; appended to MMC output filenames. Must match allen_brain_mmc_precomputed_stats_h5."}
         allen_brain_mmc_precomputed_stats_h5: {help: "A precomputed statistics file from the Allen Brain Cell Atlas containing reference statistics (the average gene expression profile per cell type cluster and cell type taxonomy)."}
         allen_brain_mmc_marker_genes_json: {help: "Optional marker gene lookup (parent node -> marker genes), e.g. extracted from a previous run's extended_results.json. If provided, skips on-the-fly marker computation."}
+        raw_data_bucket: {help: "Dataset raw data bucket (e.g. gs://asap-raw-team-voet-pmdbs-sn-rnaseq-parsebio); outputs are uploaded under `<raw_data_bucket>/workflow_execution/<workflow_name>/`."}
+        staging_data_buckets: {help: "Set of staging buckets  (dev and uat) for uploading workflow outputs."}
         container_registry: {help: "Container registry where workflow Docker images are hosted."}
         zones: {help: "Space-delimited set of GCP zones to spin up compute in. ['us-central1-c us-central1-f']"}
     }
@@ -202,7 +258,7 @@ task merge_runs {
         String zones
     }
 
-    String merged_adata_name = "~{dataset_id}.merged.mmc.h5ad"
+    String merged_run_adata_name = "~{dataset_id}.merged.mmc.h5ad"
 
     Int mem_gb = ceil(size(cleaned_run_adata_objects, "GB") * 6 + 20)
     Int disk_size = ceil(size(cleaned_run_adata_objects, "GB") * 3 + 50)
@@ -212,17 +268,17 @@ task merge_runs {
         
         merge_runs.py \
             --adata-inputs ~{sep=' ' cleaned_run_adata_objects} \
-            --adata-output ~{merged_adata_name}
+            --adata-output ~{merged_run_adata_name}
 
         upload_outputs \
             -b ~{billing_project} \
             -d ~{raw_data_path} \
             -i ~{write_tsv(workflow_info)} \
-            -o ~{merged_adata_name}
+            -o ~{merged_run_adata_name}
     >>>
     
     output {
-        String merged_adata_object = "~{raw_data_path}/~{merged_adata_name}"
+        String merged_run_adata_object = "~{raw_data_path}/~{merged_run_adata_name}"
     }
 
     runtime {
