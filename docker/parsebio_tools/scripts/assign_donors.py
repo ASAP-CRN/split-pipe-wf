@@ -45,12 +45,12 @@ def load_table(file_path: Path, check_join_key: str, sep: str = ",") -> pd.DataF
 VIREO_STAT_COLS = ["prob_max", "prob_doublet", "n_vars", "best_singlet", "best_doublet", "doublet_logLikRatio"]
 
 
-# Team Voet PB-002 pool_5: Contributors confirmed (2026-10-26) that donor9 in the
-# Vireo output is ASA_137. Since Vireo generically labels donorN, this replacement
-# is keyed to be specific to the dataset and Parse sample ("pool_5"). This name
+# Team Voet PB-002 pool_5 (DS_PMDBS_0038): Contributors confirmed (2026-10-26) that donor9
+# in the Vireo output is ASA_137. Since Vireo generically labels donorN, this replacement
+# is keyed to be specific to the ASAP dataset ID and Parse sample ("pool_5"). This name
 # exists only in PB-002 and does not/will never exist in PB-001.
 VIREO_DONOR_RENAMES = {
-    ("team-voet-pmdbs-sn-rnaseq-parsebio", "pool_5"): {"donor9": "ASA_137"},
+    ("DS_PMDBS_0038", "pool_5"): {"donor9": "ASA_137"},
 }
 
 

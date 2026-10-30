@@ -219,7 +219,7 @@ workflow split_pipe_analysis {
     }
 
     parameter_meta {
-        dataset_id: {help: "The unique identifier for the dataset."}
+        dataset_id: {help: "ASAP dataset ID (e.g. DS_PMDBS_0038); used in output names and the obs dataset and batch_id columns."}
         team_id: {help: "ASAP team identifier"}
         parse_runs: {help: "Array of ParseRun structs containing run-level information for each sequencing run."}
         genome_name: {help: "The name of which reference genome is used. Either 'hg38' (human) or 'mm10' (mouse)."}
@@ -283,7 +283,7 @@ task merge_runs {
     }
 
     runtime {
-        docker: "~{container_registry}/parsebio_tools:0.3.2"
+        docker: "~{container_registry}/parsebio_tools:0.3.3"
         cpu: 4
         memory: "~{mem_gb} GB"
         disks: "local-disk ~{disk_size} SSD"

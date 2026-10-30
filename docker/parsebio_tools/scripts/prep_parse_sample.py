@@ -300,7 +300,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--dataset",
         required=True,
-        help="Dataset identifier (e.g. team-voet-pmdbs-sn-rnaseq-parsebio)"
+        help="ASAP dataset ID (e.g. DS_PMDBS_0038)"
     )
     parser.add_argument(
         "--sample-map",

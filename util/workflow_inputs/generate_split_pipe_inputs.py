@@ -138,6 +138,12 @@ def get_parse_samples(parse_samples_df, run_id):
 
 def main(args):
     data_df = pd.read_csv(args.data_csv)
+    # ASAP dataset ID (e.g. DS_PMDBS_0038) is the workflow dataset_id, as in sc-rnaseq-wf;
+    # --dataset-id (the bucket-style name) is only used for bucket paths and the output filename
+    asap_dataset_ids = sorted(data_df["ASAP_dataset_id"].unique())
+    if len(asap_dataset_ids) != 1:
+        raise SystemExit(f"Expected one ASAP_dataset_id in DATA.csv, found {asap_dataset_ids}.")
+    asap_dataset_id = asap_dataset_ids[0]
     sample_df = pd.read_csv(args.sample_csv)
     runs_df = pd.read_csv(args.runs_tsv, delimiter="\t", dtype=str)
     parse_samples_df = pd.read_csv(args.parse_samples_tsv, delimiter="\t", dtype=str)
@@ -195,7 +201,7 @@ def main(args):
     staging_env = "dev" if args.embargoed else "uat"
     staging_bucket_types = ["dev"] if args.embargoed else ["dev", "uat"]
 
-    inputs_json[f"{WORKFLOW_NAME}.dataset_id"] = args.dataset_id
+    inputs_json[f"{WORKFLOW_NAME}.dataset_id"] = asap_dataset_id
     inputs_json[f"{WORKFLOW_NAME}.team_id"] = args.team_id
     inputs_json[f"{WORKFLOW_NAME}.parse_runs"] = parse_runs
     inputs_json[f"{WORKFLOW_NAME}.raw_data_bucket"] = f"gs://asap-raw-{args.dataset_id}"
@@ -216,6 +222,7 @@ def main(args):
     with open(inputs_output_filename, "w") as f:
         json.dump(inputs_json, f, indent=4)
     print(f"Wrote input JSON file: {inputs_output_filename}")
+    print(f"  dataset_id: {asap_dataset_id}")
     for parse_run in parse_runs:
         print(
             f"  {parse_run['run_id']}: {parse_run['batch']}, {parse_run['kit']}/{parse_run['chemistry']}, "
