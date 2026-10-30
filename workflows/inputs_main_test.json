@@ -162,6 +162,7 @@
     "split_pipe_analysis.n_mads_upper": 5,
     "split_pipe_analysis.mmc_taxonomy": "siletti_20240330",
     "split_pipe_analysis.allen_brain_mmc_precomputed_stats_h5": "gs://asap-workflow-dev/workflow-resources/precomputed_stats.siletti.training.h5",
+    "split_pipe_analysis.raw_data_bucket": "gs://asap-raw-team-voet-pmdbs-sn-rnaseq-parsebio",
     "split_pipe_analysis.container_registry": "us-central1-docker.pkg.dev/dnastack-asap-parkinsons/workflow-images",
     "split_pipe_analysis.zones": "us-central1-c us-central1-f"
 }

@@ -34,11 +34,15 @@ workflow postprocess {
         String workflow_release
         String run_timestamp
         
-        String raw_data_path
+        String raw_data_path_prefix
         String billing_project
         String container_registry
         String zones
     }
+
+    String sub_workflow_name = "postprocess"
+    String sub_workflow_version = "1.0.0"
+    String raw_data_path = "~{raw_data_path_prefix}/~{sub_workflow_name}/~{sub_workflow_version}/~{run_timestamp}"
 
     Array[Array[String]] workflow_info = [[run_timestamp, workflow_name, workflow_version, workflow_release]]
     String run_prefix = "~{dataset_id}.~{run_id}"
@@ -124,6 +128,7 @@ workflow postprocess {
     }
 
     output {
+        Array[File] prepped_adata = prep_parse_sample.prepped_adata  # Intermediate, not uploaded
         File merged_adata = merge_and_plot_qc_metrics.merged_adata_object #!FileCoercion
         File initial_metadata = merge_and_plot_qc_metrics.qc_initial_metadata_csv #!FileCoercion
         Array[File] qc_plots = merge_and_plot_qc_metrics.qc_plots_png #!FileCoercion
@@ -135,6 +140,7 @@ workflow postprocess {
         File mmc_log_txt = map_cell_types.mmc_log_txt #!FileCoercion
         File mmc_adata_object = add_mapped_cell_types.mmc_adata_object
         File mmc_results_parquet = add_mapped_cell_types.mmc_results_parquet #!FileCoercion
+        String postprocess_raw_data_path = raw_data_path  # Used by merge_runs in main.wdl to upload to the same path
     }
 
     parameter_meta {
@@ -160,7 +166,7 @@ workflow postprocess {
         workflow_version: {help: "Workflow version; stored in the file-level manifest and final manifest with all saved files."}
         workflow_release: {help: "GitHub release; stored in the file-level manifest and final manifest with all saved files."}
         run_timestamp: {help: "UTC timestamp; stored in the file-level manifest and final manifest with all saved files."}
-        raw_data_path: {help: "Raw data bucket path for postprocess outputs."}
+        raw_data_path_prefix: {help: "Raw data bucket prefix (`<raw_data_bucket>/workflow_execution/<workflow_name>`); outputs are uploaded to `<prefix>/postprocess/<sub_workflow_version>/<run_timestamp>`."}
         billing_project: {help: "Billing project to charge GCP costs."}
         container_registry: {help: "Container registry where workflow Docker images are hosted."}
         zones: {help: "Space-delimited set of GCP zones to spin up compute in. ['us-central1-c us-central1-f']"}

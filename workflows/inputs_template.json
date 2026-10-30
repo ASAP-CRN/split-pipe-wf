@@ -45,7 +45,7 @@
     "split_pipe_analysis.mmc_taxonomy": "String (MapMyCells reference taxonomy, e.g. siletti_20240330)",
     "split_pipe_analysis.allen_brain_mmc_precomputed_stats_h5": "File (MapMyCells precomputed stats for the taxonomy)",
     "split_pipe_analysis.allen_brain_mmc_marker_genes_json": "File? (optional; marker gene lookup, skips on-the-fly markers)",
-    "split_pipe_analysis.merge_runs_flag": "Boolean (optional, default = true)",
+    "split_pipe_analysis.raw_data_bucket": "String (dataset raw data bucket, e.g. gs://asap-raw-team-voet-pmdbs-sn-rnaseq-parsebio; outputs go under workflow_execution/<workflow_name>/)",
     "split_pipe_analysis.container_registry": "String",
     "split_pipe_analysis.zones": "String (optional, default = \"us-central1-c us-central1-f\")"
 }
