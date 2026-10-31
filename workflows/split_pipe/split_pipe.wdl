@@ -86,6 +86,7 @@ workflow split_pipe {
             genome_ref_tar_gz = genome_ref_final,
             sublibrary_tars = split_pipe_sublibrary.sublibrary_tar_gz,  # Gathered Array[File] from the split-pipe scatter
             sublibrary_ids = sublibrary_ids,
+            parameter_file = parameter_file,
             raw_data_path = raw_data_path,
             workflow_info = workflow_info,
             billing_project = billing_project,
@@ -117,7 +118,7 @@ workflow split_pipe {
         chemistry: {help: "Parse Bio chemistry: v1-v4"}
         kit: {help: "Parse Bio kit: WT_mini, WT, WT_mega, WT_mega_384, WT_penta, WT_penta_384"}
         sample_list_tsv: {help: "Parse sample list (--samp_list): one line per sample, '<sample_name> <round-1 wells>', e.g. 'pool_1 A1-B3'. Shared by every sublibrary in the run."}
-        parameter_file: {help: "Optional split-pipe --parfile; 'key value' per line."}
+        parameter_file: {help: "Optional split-pipe --parfile ('key value' per line), passed to every sublibrary and comb call. Use split_pipe_params.txt (log_memory_use False) to avoid a split-pipe memory-profiler race that can fail a run."}
         raw_data_path_prefix: {help: "Raw data bucket prefix (`<raw_data_bucket>/workflow_execution/<workflow_name>`); outputs are uploaded to `<prefix>/split_pipe/<sub_workflow_version>/<run_timestamp>`."}
         workflow_name: {help: "Workflow name; stored in the file-level manifest and final manifest with all saved files."}
         workflow_version: {help: "Workflow version; stored in the file-level manifest and final manifest with all saved files."}
@@ -304,6 +305,7 @@ task combine_sublibraries {
         File genome_ref_tar_gz
         Array[File] sublibrary_tars
         Array[String] sublibrary_ids
+        File? parameter_file
 
         String raw_data_path
         Array[Array[String]] workflow_info
@@ -339,7 +341,8 @@ task combine_sublibraries {
             --sublib_list ~{sublib_list} \
             --sublib_pref "$PWD/sublibs/" \
             --output_dir combined_sublibs \
-            --nthreads ~{threads}
+            --nthreads ~{threads} \
+            ~{if defined(parameter_file) then "--parfile " + select_first([parameter_file]) else ""}
 
         # split-pipe can exit 0 having produced nothing
         if [[ ! -s combined_sublibs/all-sample/DGE_filtered/count_matrix.mtx ]]; then
@@ -385,6 +388,7 @@ task combine_sublibraries {
         genome_ref_tar_gz: {help: "split-pipe mkref index (tar.gz), from make_reference or supplied to the workflow."}
         sublibrary_tars: {help: "Array of sublibrary tar.gz files to be combined."}
         sublibrary_ids: {help: "Array of sublibrary identifiers corresponding to the tar.gz files."}
+        parameter_file: {help: "Optional split-pipe --parfile; 'key value' per line."}
         raw_data_path: {help: "Raw data bucket path to upload outputs to."}
         workflow_info: {help: "UTC timestamp, workflow name, workflow version, and GitHub release; stored in the file-level manifest and final manifest with all saved files."}
         billing_project: {help: "Billing project to charge GCP costs."}
