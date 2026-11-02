@@ -1,7 +1,7 @@
 ARG MINICONDA_VERSION
 
 # Utility script (upload_outputs) from container to upload split-pipe outputs to GCP
-FROM us-central1-docker.pkg.dev/dnastack-asap-parkinsons/workflow-images/util:1.2.0 AS scripts
+FROM us-central1-docker.pkg.dev/dnastack-asap-parkinsons/workflow-images/util:1.3.0 AS scripts
 
 # Unzip the split-pipe source code and copy it into the image
 FROM ubuntu:jammy AS tools
