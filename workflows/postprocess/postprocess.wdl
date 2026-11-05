@@ -195,8 +195,8 @@ task prep_parse_sample {
     String donor_assignments = "~{output_prefix}.donor_assignments.csv"
     String adata_out = "~{output_prefix}.prepped.h5ad"
 
-    Int threads = 4
-    Int mem_gb = 16
+    Int threads = 12
+    Int mem_gb = 64
     Int disk_size = ceil(size(combined_sublibs_tar_gz, "GB") + 20)
 
     command <<<

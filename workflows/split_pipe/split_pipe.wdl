@@ -319,7 +319,7 @@ task combine_sublibraries {
     String comb_tar_gz = "~{comb_name}.tar.gz"
     
     Int threads = 16
-    Int mem_gb = 48  # TODO: 6.6 GB peak RSS for 2 PB-001 sublibraries; PB-002 has 16
+    Int mem_gb = 96
     Int disk_size = ceil((size(sublibrary_tars, "GB") * 8) + (size(genome_ref_tar_gz, "GB") * 3) + 50)
 
     command <<<
@@ -336,6 +336,7 @@ task combine_sublibraries {
             tar -xzf "${sublib_tar}" -C sublibs
         done
 
+        /usr/bin/time -v \
         split-pipe \
             --mode comb \
             --sublib_list ~{sublib_list} \
