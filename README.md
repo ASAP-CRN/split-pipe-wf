@@ -53,7 +53,7 @@ Workflow names:
 
 `split_pipe` and `postprocess` can also be run on their own.
 
-![Workflow diagram](workflows/workflow_diagram.png "Workflow diagram")
+![Workflow diagram](workflows/workflow_diagram.svg "Workflow diagram")
 
 **Entrypoint**: [workflows/main.wdl](workflows/main.wdl)
 
