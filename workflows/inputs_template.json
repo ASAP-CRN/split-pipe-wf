@@ -1,5 +1,5 @@
 {
-    "split_pipe_analysis.dataset_id": "String (The unique identifier for the dataset.)",
+    "split_pipe_analysis.asap_dataset_id": "String (ASAP dataset ID, e.g. DS_PMDBS_0038; used in output names and the obs dataset and batch_id columns)",
     "split_pipe_analysis.team_id": "String (ASAP team identifier; used in batch_id.)",
     "split_pipe_analysis.parse_runs": [
         {

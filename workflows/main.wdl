@@ -10,7 +10,7 @@ import "postprocess/postprocess.wdl" as PostProcess
 
 workflow split_pipe_analysis {
     input {
-        String dataset_id
+        String asap_dataset_id
         String team_id
         Array[ParseRun] parse_runs
 
@@ -77,7 +77,7 @@ workflow split_pipe_analysis {
     scatter (run in parse_runs) {
         call SplitPipe.split_pipe {
             input:
-                dataset_id = dataset_id,
+                asap_dataset_id = asap_dataset_id,
                 run_id = run.run_id,
                 sublibraries = run.sublibraries,
                 genome_name = genome_name,
@@ -100,7 +100,7 @@ workflow split_pipe_analysis {
 
         call PostProcess.postprocess {
             input:
-                dataset_id = dataset_id,
+                asap_dataset_id = asap_dataset_id,
                 team_id = team_id,
                 combined_sublibs_tar_gz = split_pipe.combined_sublibs_tar_gz,
                 run_id = run.run_id,
@@ -136,7 +136,7 @@ workflow split_pipe_analysis {
     call merge_runs {
         input:
             cleaned_run_adata_objects = postprocess.mmc_adata_object,
-            dataset_id = dataset_id,
+            asap_dataset_id = asap_dataset_id,
             raw_data_path = postprocess_raw_path,
             workflow_info = workflow_info,
             billing_project = get_workflow_metadata.billing_project,
@@ -219,7 +219,7 @@ workflow split_pipe_analysis {
     }
 
     parameter_meta {
-        dataset_id: {help: "ASAP dataset ID (e.g. DS_PMDBS_0038); used in output names and the obs dataset and batch_id columns."}
+        asap_dataset_id: {help: "ASAP dataset ID (e.g. DS_PMDBS_0038); used in output names and the obs dataset and batch_id columns."}
         team_id: {help: "ASAP team identifier"}
         parse_runs: {help: "Array of ParseRun structs containing run-level information for each sequencing run."}
         genome_name: {help: "The name of which reference genome is used. Either 'hg38' (human) or 'mm10' (mouse)."}
@@ -249,7 +249,7 @@ workflow split_pipe_analysis {
 task merge_runs {
     input {
         Array[File] cleaned_run_adata_objects
-        String dataset_id
+        String asap_dataset_id
 
         String raw_data_path
         Array[Array[String]] workflow_info
@@ -258,7 +258,7 @@ task merge_runs {
         String zones
     }
 
-    String merged_run_adata_name = "~{dataset_id}.merged.mmc.h5ad"
+    String merged_run_adata_name = "~{asap_dataset_id}.merged.mmc.h5ad"
 
     Int mem_gb = ceil(size(cleaned_run_adata_objects, "GB") * 6 + 20)
     Int disk_size = ceil(size(cleaned_run_adata_objects, "GB") * 3 + 50)
@@ -283,7 +283,7 @@ task merge_runs {
     }
 
     runtime {
-        docker: "~{container_registry}/parsebio_tools:0.3.3"
+        docker: "~{container_registry}/parsebio_tools:1.0.0"
         cpu: 4
         memory: "~{mem_gb} GB"
         disks: "local-disk ~{disk_size} SSD"
@@ -298,7 +298,7 @@ task merge_runs {
 
     parameter_meta {
         cleaned_run_adata_objects: {help: "An array of cleaned run-level Parse Bio AnnData objects to merge."}
-        dataset_id: {help: "The unique identifier for the dataset; used to name the output."}
+        asap_dataset_id: {help: "ASAP dataset ID (e.g. DS_PMDBS_0038); used in output names."}
         raw_data_path: {help: "Raw data bucket path for the merged run outputs."}
         workflow_info: {help: "UTC timestamp, workflow name, workflow version, and GitHub release; stored in the file-level manifest and final manifest with all saved files."}
         billing_project: {help: "Billing project to charge GCP costs."}

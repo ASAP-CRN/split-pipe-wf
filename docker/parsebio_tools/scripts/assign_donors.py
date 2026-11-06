@@ -54,23 +54,23 @@ VIREO_DONOR_RENAMES = {
 }
 
 
-def rename_vireo_donors(join_df: pd.DataFrame, dataset_id: str) -> pd.DataFrame:
+def rename_vireo_donors(join_df: pd.DataFrame, asap_dataset_id: str) -> pd.DataFrame:
     """
     Apply confirmed vireo donor -> subject renames for this dataset and Parse sample
     (VIREO_DONOR_RENAMES). Raises if an expected vireo donor is absent or the target subject
     already has vireo-assigned cells, i.e. if the inputs no longer match the confirmation.
     """
     parse_sample = join_df["parse_sample"].iloc[0]
-    renames = VIREO_DONOR_RENAMES.get((dataset_id, parse_sample), {})
+    renames = VIREO_DONOR_RENAMES.get((asap_dataset_id, parse_sample), {})
     for vireo_donor, subject_id in renames.items():
         is_donor = join_df["subject_id"] == vireo_donor
         if not is_donor.any():
-            raise ValueError(f"Expected vireo donor {vireo_donor} in {dataset_id} {parse_sample}; not found")
+            raise ValueError(f"Expected vireo donor {vireo_donor} in {asap_dataset_id} {parse_sample}; not found")
         if (join_df["subject_id"] == subject_id).any():
             raise ValueError(f"{subject_id} already has vireo-assigned cells in {parse_sample}; not renaming {vireo_donor}")
         logging.info(
             "Renaming vireo donor %s to %s for %d cells (%s %s)",
-            vireo_donor, subject_id, is_donor.sum(), dataset_id, parse_sample,
+            vireo_donor, subject_id, is_donor.sum(), asap_dataset_id, parse_sample,
         )
         join_df.loc[is_donor, "subject_id"] = subject_id
         
@@ -78,7 +78,7 @@ def rename_vireo_donors(join_df: pd.DataFrame, dataset_id: str) -> pd.DataFrame:
     leftover = sorted(join_df.loc[join_df["subject_id"].str.fullmatch(r"donor\d+", na=False), "subject_id"].unique())
     if leftover:
         raise ValueError(
-            f"Vireo donors without a subject in {dataset_id} {parse_sample}: {leftover}"
+            f"Vireo donors without a subject in {asap_dataset_id} {parse_sample}: {leftover}"
         )
 
     return join_df
@@ -88,7 +88,7 @@ def assign_subjects(
     cell_meta: pd.DataFrame,
     vireo_df: pd.DataFrame | None,
     subject_id: str | None,
-    dataset_id: str,
+    asap_dataset_id: str,
 ) -> pd.DataFrame:
     """
     Assign a subject to every cell in one Parse sample's cell metadata.
@@ -109,7 +109,7 @@ def assign_subjects(
         join_df = join_df.rename(columns={"donor_id": "subject_id", **vireo_renames})
 
         # Confirmed vireo donorN -> subject_id rename
-        join_df = rename_vireo_donors(join_df, dataset_id)
+        join_df = rename_vireo_donors(join_df, asap_dataset_id)
         
         # Check the proportion of missing subject IDs and set NAs to "unassigned"
         check_missing_subject_ids(join_df)
@@ -181,7 +181,7 @@ def main(args: argparse.Namespace):
         cell_meta,
         vireo_df,
         subject_id=args.subject_id,
-        dataset_id=args.dataset_id
+        asap_dataset_id=args.asap_dataset_id
     )
     
     join_data.to_csv(args.output, index=False)
@@ -216,9 +216,9 @@ if __name__ == "__main__":
         help="Output CSV"
     )
     parser.add_argument(
-        "--dataset-id",
+        "--asap-dataset-id",
         required=True,
-        help="ASAP dataset ID; scopes confirmed vireo donor renames (VIREO_DONOR_RENAMES)"
+        help="ASAP dataset ID (e.g. DS_PMDBS_0038); scopes confirmed vireo donor renames (VIREO_DONOR_RENAMES)"
     )
 
     args = parser.parse_args()

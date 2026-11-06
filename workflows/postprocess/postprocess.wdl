@@ -7,7 +7,7 @@ import "../structs.wdl"
 workflow postprocess {
     input {
         File combined_sublibs_tar_gz
-        String dataset_id
+        String asap_dataset_id
         String team_id
         String run_id
         String batch
@@ -45,11 +45,11 @@ workflow postprocess {
     String raw_data_path = "~{raw_data_path_prefix}/~{sub_workflow_name}/~{sub_workflow_version}/~{run_timestamp}"
 
     Array[Array[String]] workflow_info = [[run_timestamp, workflow_name, workflow_version, workflow_release]]
-    String run_prefix = "~{dataset_id}.~{run_id}"
+    String run_prefix = "~{asap_dataset_id}.~{run_id}"
 
     scatter (parse_sample in parse_samples) {
 
-        # sample_prefix labels a parse sample, merge_key (dataset_id excluded for
+        # sample_prefix labels a parse sample, merge_key (asap_dataset_id excluded for
         # brevity) labels cells within a parse sample so they are unique upon merge
         String sample_prefix = "~{run_prefix}.~{parse_sample.parse_sample_name}"
         String merge_key = "~{run_id}.~{parse_sample.parse_sample_name}"
@@ -58,7 +58,7 @@ workflow postprocess {
             input:
                 combined_sublibs_tar_gz = combined_sublibs_tar_gz,
                 output_prefix = sample_prefix,
-                dataset_id = dataset_id,
+                asap_dataset_id = asap_dataset_id,
                 team_id = team_id,
                 batch = batch,
                 sample_name = parse_sample.parse_sample_name,
@@ -145,7 +145,7 @@ workflow postprocess {
 
     parameter_meta {
         combined_sublibs_tar_gz: {help: "Tarball of the split-pipe comb output directory for one Parse run."}
-        dataset_id: {help: "ASAP dataset identifier; used in output names and batch_id."}
+        asap_dataset_id: {help: "ASAP dataset ID (e.g. DS_PMDBS_0038); used in output names and the obs dataset and batch_id columns."}
         team_id: {help: "ASAP team identifier; used in batch_id."}
         run_id: {help: "Parse run ID (e.g. PB-001); used in output names and cell-ID suffixes."}
         batch: {help: "SAMPLE.csv batch value for this Parse run (e.g. Batch1)."}
@@ -178,7 +178,7 @@ task prep_parse_sample {
     input {
         String output_prefix
         File combined_sublibs_tar_gz
-        String dataset_id
+        String asap_dataset_id
         String team_id
         String batch
         String sample_name
@@ -211,7 +211,7 @@ task prep_parse_sample {
             --cell-meta "${dge_dir}/cell_metadata.csv" \
             ~{"--vireo " + donor_id_vireo_mapping} \
             ~{"--subject-id " + subject_id} \
-            --dataset-id ~{dataset_id} \
+            --asap-dataset-id ~{asap_dataset_id} \
             --output ~{donor_assignments}
 
         /usr/bin/time -v \
@@ -222,7 +222,7 @@ task prep_parse_sample {
             --subject-path ~{subject_csv} \
             --batch ~{batch} \
             --team ~{team_id} \
-            --dataset ~{dataset_id} \
+            --asap-dataset-id ~{asap_dataset_id} \
             ~{"--sample-map " + sample_map} \
             --output ~{adata_out}
     >>>
@@ -232,7 +232,7 @@ task prep_parse_sample {
     }
 
     runtime {
-        docker: "~{container_registry}/parsebio_tools:0.3.3"
+        docker: "~{container_registry}/parsebio_tools:1.0.0"
         cpu: threads
         memory: "~{mem_gb} GB"
         disks: "local-disk ~{disk_size} SSD"
@@ -246,9 +246,9 @@ task prep_parse_sample {
     }
 
     parameter_meta {
-        output_prefix: {help: "Prefix for output files of the form <dataset_id>.<run_id>.<parse_sample>."}
+        output_prefix: {help: "Prefix for output files of the form <asap_dataset_id>.<run_id>.<parse_sample>."}
         combined_sublibs_tar_gz: {help: "Tarball of the split-pipe comb output directory."}
-        dataset_id: {help: "ASAP dataset identifier; used in output names and batch_id."}
+        asap_dataset_id: {help: "ASAP dataset ID (e.g. DS_PMDBS_0038); used in output names and the obs dataset and batch_id columns."}
         team_id: {help: "ASAP team identifier; used in batch_id."}
         batch: {help: "SAMPLE.csv batch value for this Parse run (e.g. Batch1)."}
         sample_name: {help: "Parse sample name; must match a comb output subdirectory."}
@@ -322,7 +322,7 @@ task merge_and_plot_qc_metrics {
     }
 
     runtime {
-        docker: "~{container_registry}/parsebio_tools:0.3.3"
+        docker: "~{container_registry}/parsebio_tools:1.0.0"
         cpu: 4
         memory: "~{mem_gb} GB"
         disks: "local-disk ~{disk_size} SSD"
@@ -336,7 +336,7 @@ task merge_and_plot_qc_metrics {
     }
 
     parameter_meta {
-        output_prefix: {help: "Prefix for output files of the form <dataset_id>.<run_id>."}
+        output_prefix: {help: "Prefix for output files of the form <asap_dataset_id>.<run_id>."}
         merge_keys: {help: "Concat key per AnnData object, in the same order as prepped_adata_objects (<run_id>.<parse_sample>); becomes the cell-ID suffix."}
         prepped_adata_objects: {help: "An array of Parse Sample-level AnnData objects to merge."}
         raw_data_path: {help: "Raw data bucket path for postprocess outputs."}
@@ -406,7 +406,7 @@ task filter {
     }
 
     runtime {
-        docker: "~{container_registry}/parsebio_tools:0.3.3"
+        docker: "~{container_registry}/parsebio_tools:1.0.0"
         cpu: 4
         memory: "~{mem_gb} GB"
         disks: "local-disk ~{disk_size} SSD"
@@ -420,7 +420,7 @@ task filter {
     }
 
     parameter_meta {
-        output_prefix: {help: "Prefix for output files of the form <dataset_id>.<run_id>."}
+        output_prefix: {help: "Prefix for output files of the form <asap_dataset_id>.<run_id>."}
         merged_adata_object: {help: "Merged AnnData object."}
         pct_counts_mt_max: {help: "Maximum percentage of mitochondrial gene counts allowed per cell. [10]"}
         doublet_score_max: {help: "Maximum doublet detection score threshold. [0.2]"}
@@ -499,7 +499,7 @@ task map_cell_types {
     }
 
     runtime {
-        docker: "~{container_registry}/parsebio_tools:0.3.3"
+        docker: "~{container_registry}/parsebio_tools:1.0.0"
         cpu: threads
         memory: "~{mem_gb} GB"
         disks: "local-disk ~{disk_size} SSD"
@@ -513,7 +513,7 @@ task map_cell_types {
     }
 
     parameter_meta {
-        output_prefix: {help: "Prefix for output files of the form <dataset_id>.<run_id>."}
+        output_prefix: {help: "Prefix for output files of the form <asap_dataset_id>.<run_id>."}
         filtered_adata_object: {help: "QC-filtered AnnData object."}
         mmc_taxonomy: {help: "Cell type taxonomy of the precomputed stats reference; appended to MMC output filenames. Must match allen_brain_mmc_precomputed_stats_h5."}
         allen_brain_mmc_precomputed_stats_h5: {help: "A precomputed statistics file from the Allen Brain Cell Atlas containing reference statistics (the average gene expression profile per cell type cluster and cell type taxonomy)."}
@@ -571,7 +571,7 @@ task add_mapped_cell_types {
     }
 
     runtime {
-        docker: "~{container_registry}/parsebio_tools:0.3.3"
+        docker: "~{container_registry}/parsebio_tools:1.0.0"
         cpu: 4
         memory: "~{mem_gb} GB"
         disks: "local-disk ~{disk_size} SSD"
@@ -585,7 +585,7 @@ task add_mapped_cell_types {
     }
 
     parameter_meta {
-        output_prefix: {help: "Prefix for output files of the form <dataset_id>.<run_id>."}
+        output_prefix: {help: "Prefix for output files of the form <asap_dataset_id>.<run_id>."}
         filtered_adata_object: {help: "QC-filtered AnnData object."}
         mmc_results_csv: {help: "Cell type mapping results CSV produced by map_cell_types."}
         raw_data_path: {help: "Raw data bucket path for postprocess outputs."}

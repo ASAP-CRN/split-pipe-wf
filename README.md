@@ -140,7 +140,7 @@ are fields of each [ParseRun](#parserun); everything else is shared.
 
 | Type | Name | Description |
 | :- | :- | :- |
-| String | dataset_id | ASAP dataset ID (e.g. `DS_PMDBS_0038`); used in output names and the `obs` `dataset` and `batch_id` columns. |
+| String | asap_dataset_id | ASAP dataset ID (e.g. `DS_PMDBS_0038`); used in output names and the `obs` `dataset` and `batch_id` columns. |
 | String | team_id | ASAP team identifier; used in `batch_id`. |
 | Array[[ParseRun](#parserun)] | parse_runs | The Parse runs (kits) in the dataset. |
 | String | genome_name | Genome name; used to name the reference. Options: 'hg38' (human) or 'mm10' (mouse). |
@@ -169,7 +169,7 @@ are fields of each [ParseRun](#parserun); everything else is shared.
 | Type | Name | Description |
 | :- | :- | :- |
 | File | combined_sublibs_tar_gz | The `split-pipe --mode comb` output directory for one Parse run, as a gzipped tarball. |
-| String | dataset_id | ASAP dataset ID; used in output names and the `obs` `dataset` and `batch_id` columns. |
+| String | asap_dataset_id | ASAP dataset ID (e.g. `DS_PMDBS_0038`); used in output names and the `obs` `dataset` and `batch_id` columns. |
 | String | team_id | ASAP team identifier; used in `batch_id`. |
 | String | run_id | Parse run ID (e.g. `PB-001`); used in output names and cell IDs. |
 | String | batch | `SAMPLE.csv` batch value for this Parse run (e.g. `Batch1`). |
@@ -255,7 +255,7 @@ into 8 sublibraries):
 Inputs:
 
 - `data-csv`: ASAP `DATA.csv`. Gives the ASAP dataset ID (`ASAP_dataset_id`, written as
-  `dataset_id`), each sublibrary's FASTQ gs URIs and its batch. `pool_id` must have the form
+  `asap_dataset_id`), each sublibrary's FASTQ gs URIs and its batch. `pool_id` must have the form
   `<prefix><run number><sublibrary letter(s)>`, e.g. `PB001a` → run `PB-001`, sublibrary
   `PB-001a`. FASTQs are deduplicated and R1/R2 are paired by file name.
 - `sample-csv`: ASAP `SAMPLE.csv`. Its `protocol_id` (one per batch) gives the `split-pipe`
@@ -275,7 +275,8 @@ Inputs:
   filter parameters, `parameter_file`, `container_registry`). Dataset, run and bucket keys are
   overwritten; the script warns about values still left as type descriptions.
 - `dataset-id`: dataset name used in bucket names (`gs://asap-raw-{dataset_id}`,
-  `gs://asap-{dev,uat}-{dataset_id}`), e.g. `team-voet-pmdbs-sn-rnaseq-parsebio`.
+  `gs://asap-{dev,uat}-{dataset_id}`), e.g. `team-voet-pmdbs-sn-rnaseq-parsebio`. Not the ASAP
+  dataset ID, which is read from `DATA.csv`.
 - `team-id`: ASAP team identifier; used in `batch_id`.
 - `embargoed`: stage to the dev bucket only; otherwise dev and uat. [false]
 
@@ -298,7 +299,7 @@ python3 util/workflow_inputs/generate_split_pipe_inputs.py \
 ## Output structure
 
 - `workflow_run_timestamp`: format: `%Y-%m-%dT%H-%M-%SZ`
-- `dataset_id` in file names is the ASAP dataset ID (e.g. `DS_PMDBS_0038`); bucket names use
+- `asap_dataset_id` in file names is the ASAP dataset ID (e.g. `DS_PMDBS_0038`); bucket names use
   the dataset name (e.g. `team-voet-pmdbs-sn-rnaseq-parsebio`).
 - Every uploaded file has a `<file>.meta.tsv` sidecar recording its timestamp, workflow name,
   workflow version and GitHub release.
@@ -339,27 +340,27 @@ asap-{dev,uat}-team-xxyy-pmdbs-sn-rnaseq-parsebio
     └── release
         └── ${crn_release_version}
             ├── split_pipe
-            │   ├── ${dataset_id}.${sublibrary_id}.name_sorted.bam
-            │   ├── ${dataset_id}.${sublibrary_id}.barcode_headLog.final.out
-            │   ├── ${dataset_id}.${run_id}.combined_sublibs.tar.gz
-            │   ├── ${dataset_id}.${run_id}.combined_sublibs.all-sample_analysis_summary.html
-            │   ├── ${dataset_id}.${run_id}.combined_sublibs.agg_sample_summary.csv
+            │   ├── ${asap_dataset_id}.${sublibrary_id}.name_sorted.bam
+            │   ├── ${asap_dataset_id}.${sublibrary_id}.barcode_headLog.final.out
+            │   ├── ${asap_dataset_id}.${run_id}.combined_sublibs.tar.gz
+            │   ├── ${asap_dataset_id}.${run_id}.combined_sublibs.all-sample_analysis_summary.html
+            │   ├── ${asap_dataset_id}.${run_id}.combined_sublibs.agg_sample_summary.csv
             │   └── MANIFEST.tsv
             └── postprocess
-                ├── ${dataset_id}.${run_id}.merged_unfiltered.h5ad
-                ├── ${dataset_id}.${run_id}.initial_metadata.csv
-                ├── ${dataset_id}.${run_id}.doublet_score.violin.png
-                ├── ${dataset_id}.${run_id}.n_genes_by_counts.violin.png
-                ├── ${dataset_id}.${run_id}.pct_counts_mt.violin.png
-                ├── ${dataset_id}.${run_id}.pct_counts_rb.violin.png
-                ├── ${dataset_id}.${run_id}.total_counts.violin.png
-                ├── ${dataset_id}.${run_id}.unassigned_removed_cells.csv
-                ├── ${dataset_id}.${run_id}.filtered_out_cells.csv
-                ├── ${dataset_id}.${run_id}.{mmc_otf_mapping,mmc_markers_mapping}.${mmc_taxonomy}.extended_results.json
-                ├── ${dataset_id}.${run_id}.{mmc_otf_mapping,mmc_markers_mapping}.${mmc_taxonomy}.results.csv
-                ├── ${dataset_id}.${run_id}.{mmc_otf_mapping,mmc_markers_mapping}.${mmc_taxonomy}.log.txt
-                ├── ${dataset_id}.${run_id}.mmc_results.parquet
-                ├── ${dataset_id}.merged.mmc.h5ad
+                ├── ${asap_dataset_id}.${run_id}.merged_unfiltered.h5ad
+                ├── ${asap_dataset_id}.${run_id}.initial_metadata.csv
+                ├── ${asap_dataset_id}.${run_id}.doublet_score.violin.png
+                ├── ${asap_dataset_id}.${run_id}.n_genes_by_counts.violin.png
+                ├── ${asap_dataset_id}.${run_id}.pct_counts_mt.violin.png
+                ├── ${asap_dataset_id}.${run_id}.pct_counts_rb.violin.png
+                ├── ${asap_dataset_id}.${run_id}.total_counts.violin.png
+                ├── ${asap_dataset_id}.${run_id}.unassigned_removed_cells.csv
+                ├── ${asap_dataset_id}.${run_id}.filtered_out_cells.csv
+                ├── ${asap_dataset_id}.${run_id}.{mmc_otf_mapping,mmc_markers_mapping}.${mmc_taxonomy}.extended_results.json
+                ├── ${asap_dataset_id}.${run_id}.{mmc_otf_mapping,mmc_markers_mapping}.${mmc_taxonomy}.results.csv
+                ├── ${asap_dataset_id}.${run_id}.{mmc_otf_mapping,mmc_markers_mapping}.${mmc_taxonomy}.log.txt
+                ├── ${asap_dataset_id}.${run_id}.mmc_results.parquet
+                ├── ${asap_dataset_id}.merged.mmc.h5ad
                 └── MANIFEST.tsv
 ```
 
@@ -379,9 +380,9 @@ intermediates in the cromwell-output bucket.
 | Type | Name | Staged | Description |
 | :- | :- | :- | :- |
 | Array[Array[File]] | sublibrary_tar_gz | | Per sublibrary: the `split-pipe --mode all` output directory, as a gzipped tarball; input to `comb`. |
-| Array[Array[File]] | sublibrary_bams | ✓ | Per sublibrary: `${dataset_id}.${sublibrary_id}.name_sorted.bam`, the `split-pipe` aligned, name-sorted BAM. |
-| Array[Array[File]] | sublibrary_star_logs | ✓ | Per sublibrary: `${dataset_id}.${sublibrary_id}.barcode_headLog.final.out`, the STAR alignment summary. |
-| Array[File] | combined_sublibs_tar_gz | ✓ | `${dataset_id}.${run_id}.combined_sublibs.tar.gz`; the `comb` output directory, including the per-sample count matrices (`DGE_filtered`, `DGE_unfiltered`) and reports. |
+| Array[Array[File]] | sublibrary_bams | ✓ | Per sublibrary: `${asap_dataset_id}.${sublibrary_id}.name_sorted.bam`, the `split-pipe` aligned, name-sorted BAM. |
+| Array[Array[File]] | sublibrary_star_logs | ✓ | Per sublibrary: `${asap_dataset_id}.${sublibrary_id}.barcode_headLog.final.out`, the STAR alignment summary. |
+| Array[File] | combined_sublibs_tar_gz | ✓ | `${asap_dataset_id}.${run_id}.combined_sublibs.tar.gz`; the `comb` output directory, including the per-sample count matrices (`DGE_filtered`, `DGE_unfiltered`) and reports. |
 | Array[File] | all_sample_summary_html | ✓ | The `comb` all-sample HTML summary report. |
 | Array[File] | agg_sample_summary_csv | ✓ | The `comb` per-sample summary statistics. |
 
@@ -389,15 +390,15 @@ intermediates in the cromwell-output bucket.
 
 | Type | Name | Staged | Description |
 | :- | :- | :- | :- |
-| Array[Array[File]] | prepped_adata | | Per Parse sample: `${dataset_id}.${run_id}.${parse_sample}.prepped.h5ad`, all called cells with donor assignments, QC metrics, scrublet scores and ASAP metadata. |
-| Array[File] | merged_adata | ✓ | `${dataset_id}.${run_id}.merged_unfiltered.h5ad`; all Parse samples concatenated, before any filtering. |
-| Array[File] | initial_metadata | ✓ | `${dataset_id}.${run_id}.initial_metadata.csv`; `obs` of the merged object. |
+| Array[Array[File]] | prepped_adata | | Per Parse sample: `${asap_dataset_id}.${run_id}.${parse_sample}.prepped.h5ad`, all called cells with donor assignments, QC metrics, scrublet scores and ASAP metadata. |
+| Array[File] | merged_adata | ✓ | `${asap_dataset_id}.${run_id}.merged_unfiltered.h5ad`; all Parse samples concatenated, before any filtering. |
+| Array[File] | initial_metadata | ✓ | `${asap_dataset_id}.${run_id}.initial_metadata.csv`; `obs` of the merged object. |
 | Array[Array[File]] | qc_plots | ✓ | Pre-filter violin plots of `n_genes_by_counts`, `total_counts`, `pct_counts_mt`, `pct_counts_rb` and `doublet_score`. |
-| Array[File] | filtered_adata_object | | `${dataset_id}.${run_id}.filtered.h5ad`; cells passing donor assignment and all QC filters. |
+| Array[File] | filtered_adata_object | | `${asap_dataset_id}.${run_id}.filtered.h5ad`; cells passing donor assignment and all QC filters. |
 | Array[File] | unassigned_removed_cells_csv | ✓ | Cells removed for having no ASAP sample (vireo `doublet`/`unassigned`). |
 | Array[File] | filtered_out_cells_csv | ✓ | Cells removed by `filter`, with a column per filter they failed. Same layout as `unassigned_removed_cells_csv`. |
 | Array[File] | mmc_results_csv, mmc_extended_results_json, mmc_log_txt | ✓ | MapMyCells outputs: per-cell assignments, full results (incl. the marker genes used) and log. |
-| Array[File] | mmc_adata_object | | `${dataset_id}.${run_id}.mmc.h5ad`; the filtered object with cell type labels; input to `merge_runs`. |
+| Array[File] | mmc_adata_object | | `${asap_dataset_id}.${run_id}.mmc.h5ad`; the filtered object with cell type labels; input to `merge_runs`. |
 | Array[File] | mmc_results_parquet | ✓ | Per-cell cell type labels. |
 
 ### From `split_pipe_analysis` only
@@ -405,7 +406,7 @@ intermediates in the cromwell-output bucket.
 | Type | Name | Staged | Description |
 | :- | :- | :- | :- |
 | File | genome_ref_tar_gz_used | | The `split-pipe` mkref index used; pass as `genome_ref_tar_gz` to skip `make_reference` in later submissions. |
-| File | final_merged_adata | ✓ | `${dataset_id}.merged.mmc.h5ad`; all runs' filtered, cell-typed cells, raw counts, all genes (see [AnnData contents](#anndata-contents)). |
+| File | final_merged_adata | ✓ | `${asap_dataset_id}.merged.mmc.h5ad`; all runs' filtered, cell-typed cells, raw counts, all genes (see [AnnData contents](#anndata-contents)). |
 | Array[File] | split_pipe_manifest_tsvs, postprocess_manifest_tsvs | | The `MANIFEST.tsv` written to each staging bucket. |
 
 ## AnnData contents

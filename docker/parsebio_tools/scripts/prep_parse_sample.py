@@ -169,7 +169,7 @@ def join_asap_metadata(
     subject_df: pd.DataFrame,
     batch: str,
     team: str,
-    dataset: str,
+    asap_dataset_id: str,
     sample_map: pd.DataFrame | None = None,  # optional: parse_sample, subject_id, sample_id
     parse_sample: str | None = None,
 ) -> AnnData:
@@ -178,7 +178,7 @@ def join_asap_metadata(
     formatting matching sc-rnaseq-wf's prep_metadata:
 
     Run-level, assigned to every cell (including vireo doublet/unassigned):
-    - batch, team, dataset, batch_id = f"{team}_{dataset}_{batch}"
+    - batch, team, dataset (the ASAP dataset ID), batch_id = f"{team}_{asap_dataset_id}_{batch}"
 
     Donor-level, from the lookup (NA for vireo doublet/unassigned):
     - sample (ASAP_sample_id), sample_id, sex, brain_region_level_1/2/3
@@ -214,8 +214,8 @@ def join_asap_metadata(
     # Run-level fields hold for every cell in the Parse run, so assign as scalars
     obs["batch"] = batch
     obs["team"] = team
-    obs["dataset"] = dataset
-    obs["batch_id"] = f"{team}_{dataset}_{batch}"
+    obs["dataset"] = asap_dataset_id
+    obs["batch_id"] = f"{team}_{asap_dataset_id}_{batch}"
 
     n_non_singlet = obs["subject_id"].isin(vireo_non_singlets).sum()
     logging.info("Joined ASAP metadata; %d cells without a sample (vireo doublet/unassigned)", n_non_singlet)
@@ -241,7 +241,7 @@ def main(args: argparse.Namespace):
         subject_df=subject_df,
         batch=args.batch,
         team=args.team,
-        dataset=args.dataset,
+        asap_dataset_id=args.asap_dataset_id,
         sample_map=sample_map,
         parse_sample=parse_sample,
     )
@@ -298,9 +298,9 @@ if __name__ == "__main__":
         help="ASAP team ID; used in batch_id"
     )
     parser.add_argument(
-        "--dataset",
+        "--asap-dataset-id",
         required=True,
-        help="ASAP dataset ID (e.g. DS_PMDBS_0038)"
+        help="ASAP dataset ID (e.g. DS_PMDBS_0038); sets the obs dataset column and batch_id"
     )
     parser.add_argument(
         "--sample-map",
