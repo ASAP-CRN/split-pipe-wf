@@ -33,7 +33,7 @@
     "split_pipe_analysis.genome_ref_tar_gz": "File? (optional; prebuilt split-pipe mkref index. Supply to skip make_reference, omit to build one)",
     "split_pipe_analysis.genome_fasta": "File (only used when genome_ref_tar_gz is omitted)",
     "split_pipe_analysis.genes_gtf": "File (only used when genome_ref_tar_gz is omitted)",
-    "split_pipe_analysis.parameter_file": "File? (optional; split-pipe --parfile, 'key value' per line)",
+    "split_pipe_analysis.parameter_file": "File? (optional; split-pipe --parfile, 'key value' per line. Use workflows/split_pipe/split_pipe_params.txt (log_memory_use False): split-pipe's memory profiler can otherwise fail a run with psutil.NoSuchProcess.)",
     "split_pipe_analysis.sample_csv": "File (ASAP SAMPLE.csv)",
     "split_pipe_analysis.subject_csv": "File (ASAP SUBJECT.csv)",
     "split_pipe_analysis.pct_counts_mt_max": "Int (optional, default = 10)",
@@ -46,7 +46,9 @@
     "split_pipe_analysis.allen_brain_mmc_precomputed_stats_h5": "File (MapMyCells precomputed stats for the taxonomy)",
     "split_pipe_analysis.allen_brain_mmc_marker_genes_json": "File? (optional; marker gene lookup, skips on-the-fly markers)",
     "split_pipe_analysis.raw_data_bucket": "String (dataset raw data bucket, e.g. gs://asap-raw-team-voet-pmdbs-sn-rnaseq-parsebio; outputs go under workflow_execution/<workflow_name>/)",
-    "split_pipe_analysis.staging_data_buckets": ["String (staging bucket(s) for final outputs, e.g. gs://asap-dev-team-voet-pmdbs-sn-rnaseq-parsebio)"],
+    "split_pipe_analysis.staging_data_buckets": [
+        "String (staging bucket(s) for final outputs, e.g. gs://asap-dev-team-voet-pmdbs-sn-rnaseq-parsebio)"
+    ],
     "split_pipe_analysis.container_registry": "String",
     "split_pipe_analysis.zones": "String (optional, default = \"us-central1-c us-central1-f\")"
 }
