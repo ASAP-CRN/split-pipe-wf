@@ -239,7 +239,7 @@ task split_pipe_sublibrary {
             ~{if defined(parameter_file) then "--parfile " + select_first([parameter_file]) else ""}
 
         # split-pipe can exit 0 having produced nothing; require DGE output for every listed sample
-        while read -r sample _; do
+        while read -r sample _ || [[ -n "${sample}" ]]; do
             [[ -z "${sample}" ]] && continue
             if [[ ! -s "~{sublibrary_id}/${sample}/DGE_filtered/count_matrix.mtx" ]]; then
                 echo "ERROR: split-pipe produced no DGE output for sample ${sample}" >&2
