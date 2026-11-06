@@ -187,13 +187,13 @@ are fields of each [ParseRun](#parserun); everything else is shared.
 | File | allen_brain_mmc_precomputed_stats_h5 | MapMyCells precomputed statistics for the reference taxonomy. |
 | File? | allen_brain_mmc_marker_genes_json | Marker gene lookup; if supplied, skips on-the-fly marker computation. |
 | String | container_registry | Container registry where workflow Docker images are hosted. |
-| String? | zones | GCP zones where compute will take place. ['us-central1-c us-central1-f'] |
+| String | zones | Space-delimited GCP zones where compute will take place (no default when run on its own). |
 
 Filter and MMC defaults match sc-rnaseq-wf.
 
 When `split_pipe` or `postprocess` is run on its own, it also needs the values `main.wdl`
 otherwise supplies: `workflow_name`, `workflow_version`, `workflow_release`, `run_timestamp`,
-`raw_data_path_prefix` and `billing_project`.
+`raw_data_path_prefix`, `billing_project` and `zones` (which has a default only in `main.wdl`).
 
 ## Structs
 
@@ -400,6 +400,10 @@ intermediates in the cromwell-output bucket.
 | Array[File] | mmc_results_csv, mmc_extended_results_json, mmc_log_txt | ✓ | MapMyCells outputs: per-cell assignments, full results (incl. the marker genes used) and log. |
 | Array[File] | mmc_adata_object | | `${asap_dataset_id}.${run_id}.mmc.h5ad`; the filtered object with cell type labels; input to `merge_runs`. |
 | Array[File] | mmc_results_parquet | ✓ | Per-cell cell type labels. |
+
+Run on its own, `postprocess` also returns `postprocess_raw_data_path`, the raw data bucket
+directory its outputs were uploaded to; `split_pipe_analysis` uses it to upload the merged object
+alongside them.
 
 ### From `split_pipe_analysis` only
 
