@@ -37,6 +37,7 @@ RUN apt-get -yq update \
         wget \
         unzip \
         xxd \
+        time \
     && rm -rf /var/lib/apt/lists/*
 
 RUN conda create -n split-pipe python=${PYTHON_VERSION} -y
