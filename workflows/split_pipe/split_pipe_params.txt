@@ -1,0 +1,4 @@
+# split-pipe --parfile for split_pipe_analysis; pass as parameter_file (used by every sublibrary and comb call)
+# split-pipe's detached memory profiler can exit while split-pipe measures its child processes at a
+# step start (psutil.NoSuchProcess), failing the run; the profile (process/mem_profile.txt) is unused
+log_memory_use False

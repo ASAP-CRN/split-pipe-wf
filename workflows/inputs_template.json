@@ -1,7 +1,7 @@
 {
-    "split_pipe_entrypoint.dataset_id": "String (The unique identifier for the dataset.)",
-    "split_pipe_entrypoint.team_id": "String (ASAP team identifier; used in batch_id.)",
-    "split_pipe_entrypoint.parse_runs": [
+    "split_pipe_analysis.asap_dataset_id": "String (ASAP dataset ID, e.g. DS_PMDBS_0038; used in output names and the obs dataset and batch_id columns)",
+    "split_pipe_analysis.team_id": "String (ASAP team identifier; used in batch_id.)",
+    "split_pipe_analysis.parse_runs": [
         {
             "run_id": "String (Parse run ID, e.g. PB-001; used in output names and cell IDs)",
             "kit": "String (Parse Bio kit: WT_mini, WT, WT_mega, WT_mega_384, WT_penta, WT_penta_384)",
@@ -11,9 +11,13 @@
             "sample_map": "File? (optional; parse_sample,subject_id,sample_id; needed when a subject has more than one sample in the run)",
             "sublibraries": [
                 {
-                    "sublibrary_id": "String (e.g. PB-001-a; list sublibraries in the order vireo was computed on)",
-                    "fastq_R1s": ["File"],
-                    "fastq_R2s": ["File (same order as fastq_R1s)"]
+                    "sublibrary_id": "String (e.g. PB-001a; list sublibraries in the order vireo was computed on)",
+                    "fastq_R1s": [
+                        "File"
+                    ],
+                    "fastq_R2s": [
+                        "File (same order as fastq_R1s)"
+                    ]
                 }
             ],
             "parse_samples": [
@@ -25,23 +29,26 @@
             ]
         }
     ],
-    "split_pipe_entrypoint.genome_name": "String (Reference genome name: 'hg38' or 'mm10')",
-    "split_pipe_entrypoint.genome_ref_tar_gz": "File? (optional; prebuilt split-pipe mkref index. Supply to skip make_reference, omit to build one)",
-    "split_pipe_entrypoint.genome_fasta": "File (only used when genome_ref_tar_gz is omitted)",
-    "split_pipe_entrypoint.genes_gtf": "File (only used when genome_ref_tar_gz is omitted)",
-    "split_pipe_entrypoint.parameter_file": "File? (optional; split-pipe --parfile, 'key value' per line)",
-    "split_pipe_entrypoint.sample_csv": "File (ASAP SAMPLE.csv)",
-    "split_pipe_entrypoint.subject_csv": "File (ASAP SUBJECT.csv)",
-    "split_pipe_entrypoint.pct_counts_mt_max": "Int (optional, default = 10)",
-    "split_pipe_entrypoint.doublet_score_max": "Float (optional, default = 0.2)",
-    "split_pipe_entrypoint.total_counts_limits": "Array[Int] (optional, default = [500, 150000])",
-    "split_pipe_entrypoint.n_genes_by_counts_limits": "Array[Int] (optional, default = [300, 15000])",
-    "split_pipe_entrypoint.n_mads_lower": "Float (optional, default = 3)",
-    "split_pipe_entrypoint.n_mads_upper": "Float (optional, default = 5)",
-    "split_pipe_entrypoint.mmc_taxonomy": "String (MapMyCells reference taxonomy, e.g. siletti_20240330)",
-    "split_pipe_entrypoint.allen_brain_mmc_precomputed_stats_h5": "File (MapMyCells precomputed stats for the taxonomy)",
-    "split_pipe_entrypoint.allen_brain_mmc_marker_genes_json": "File? (optional; marker gene lookup, skips on-the-fly markers)",
-    "split_pipe_entrypoint.merge_runs_flag": "Boolean (optional, default = true)",
-    "split_pipe_entrypoint.container_registry": "String",
-    "split_pipe_entrypoint.zones": "String (optional, default = \"us-central1-c us-central1-f\")"
+    "split_pipe_analysis.genome_name": "String (Reference genome name: 'hg38' or 'mm10')",
+    "split_pipe_analysis.genome_ref_tar_gz": "File? (optional; prebuilt split-pipe mkref index. Supply to skip make_reference, omit to build one)",
+    "split_pipe_analysis.genome_fasta": "File (only used when genome_ref_tar_gz is omitted)",
+    "split_pipe_analysis.genes_gtf": "File (only used when genome_ref_tar_gz is omitted)",
+    "split_pipe_analysis.parameter_file": "File? (optional; split-pipe --parfile, 'key value' per line. Use workflows/split_pipe/split_pipe_params.txt (log_memory_use False): split-pipe's memory profiler can otherwise fail a run with psutil.NoSuchProcess.)",
+    "split_pipe_analysis.sample_csv": "File (ASAP SAMPLE.csv)",
+    "split_pipe_analysis.subject_csv": "File (ASAP SUBJECT.csv)",
+    "split_pipe_analysis.pct_counts_mt_max": "Int (optional, default = 10)",
+    "split_pipe_analysis.doublet_score_max": "Float (optional, default = 0.2)",
+    "split_pipe_analysis.total_counts_limits": "Array[Int] (optional, default = [500, 150000])",
+    "split_pipe_analysis.n_genes_by_counts_limits": "Array[Int] (optional, default = [300, 15000])",
+    "split_pipe_analysis.n_mads_lower": "Float (optional, default = 3)",
+    "split_pipe_analysis.n_mads_upper": "Float (optional, default = 5)",
+    "split_pipe_analysis.mmc_taxonomy": "String (MapMyCells reference taxonomy, e.g. siletti_20240330)",
+    "split_pipe_analysis.allen_brain_mmc_precomputed_stats_h5": "File (MapMyCells precomputed stats for the taxonomy)",
+    "split_pipe_analysis.allen_brain_mmc_marker_genes_json": "File? (optional; marker gene lookup, skips on-the-fly markers)",
+    "split_pipe_analysis.raw_data_bucket": "String (dataset raw data bucket, e.g. gs://asap-raw-team-voet-pmdbs-sn-rnaseq-parsebio; outputs go under workflow_execution/<workflow_name>/)",
+    "split_pipe_analysis.staging_data_buckets": [
+        "String (staging bucket(s) for final outputs, e.g. gs://asap-dev-team-voet-pmdbs-sn-rnaseq-parsebio)"
+    ],
+    "split_pipe_analysis.container_registry": "String",
+    "split_pipe_analysis.zones": "String (optional, default = \"us-central1-c us-central1-f\")"
 }
