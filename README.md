@@ -53,6 +53,8 @@ Workflow names:
 
 `split_pipe` and `postprocess` can also be run on their own.
 
+![Workflow diagram](workflows/workflow_diagram.png "Workflow diagram")
+
 **Entrypoint**: [workflows/main.wdl](workflows/main.wdl)
 
 **Input template**: [workflows/inputs_template.json](workflows/inputs_template.json)
@@ -447,7 +449,7 @@ its `subject_id` and skips all of this.
 - **Match checks.** `assign_donors.py` fails if fewer than 5% of called cells, or of any single
   sublibrary's called cells, match the vireo table, and warns below 50%. A random overlap
   (e.g. the wrong vireo file, or sublibraries in a different order) matches ~1–3%. A partial
-  match is expected where `split-pipe` calls more cells than vireo was run on.
+  match is expected where `split-pipe` calls more cells than vireo was run on (e.g. PB-002 pool_1).
 - **Unnamed donors.** Vireo names a donor it learned without a supplied genotype by position
   (`donor<N>`). These are renamed to a subject only where the contributors confirmed the
   identity (`VIREO_DONOR_RENAMES` in `assign_donors.py`, keyed by ASAP dataset ID and Parse
@@ -481,9 +483,6 @@ subjects that need a row.
   `ASA_137` and is renamed in `VIREO_DONOR_RENAMES`.
 - **Sample map.** In PB-002 some subjects contributed more than one sample, so PB-002 takes a
   [sample map](#sample-map).
-- **Partial vireo match.** In PB-002 `pool_1`, the contributors' run called far fewer cells than
-  `split-pipe` does here in most sublibraries; the lowest sublibrary match observed is ~15%,
-  above the 5% failure threshold.
 - **Inputs generator.** `generate_split_pipe_inputs.py` assumes this dataset's `pool_id` format
   (`PB001a`) and knows only its two protocols (`Evercode_WT_v1`, `Evercode_WT_MEGA_v1`).
 - **Handling batch.** For reference, the contributors analyzed each Parse run with region-matched
