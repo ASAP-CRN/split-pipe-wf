@@ -120,7 +120,7 @@
         },
         "merge_and_plot_qc_metrics": {
           "key": "merge_and_plot_qc_metrics",
-          "digest": "",
+          "digest": "vqny5b43zsra6t4ils2s5q6o5bgsiajo",
           "tests": [
             {
               "inputs": {
