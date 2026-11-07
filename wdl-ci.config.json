@@ -1,0 +1,153 @@
+{
+  "workflows": {
+    "wf-common/wdl/structs.wdl": {
+      "key": "wf-common/wdl/structs.wdl",
+      "name": "",
+      "description": "",
+      "tasks": {}
+    },
+    "wf-common/wdl/tasks/fastqc.wdl": {
+      "key": "wf-common/wdl/tasks/fastqc.wdl",
+      "name": "",
+      "description": "",
+      "tasks": {
+        "fastqc": {
+          "key": "fastqc",
+          "digest": "",
+          "tests": []
+        }
+      }
+    },
+    "wf-common/wdl/tasks/get_workflow_metadata.wdl": {
+      "key": "wf-common/wdl/tasks/get_workflow_metadata.wdl",
+      "name": "",
+      "description": "",
+      "tasks": {
+        "get_workflow_metadata": {
+          "key": "get_workflow_metadata",
+          "digest": "",
+          "tests": []
+        }
+      }
+    },
+    "wf-common/wdl/tasks/multiqc.wdl": {
+      "key": "wf-common/wdl/tasks/multiqc.wdl",
+      "name": "",
+      "description": "",
+      "tasks": {
+        "multiqc": {
+          "key": "multiqc",
+          "digest": "",
+          "tests": []
+        }
+      }
+    },
+    "wf-common/wdl/tasks/upload_final_outputs.wdl": {
+      "key": "wf-common/wdl/tasks/upload_final_outputs.wdl",
+      "name": "",
+      "description": "",
+      "tasks": {
+        "upload_final_outputs": {
+          "key": "upload_final_outputs",
+          "digest": "",
+          "tests": []
+        }
+      }
+    },
+    "wf-common/wdl/tasks/write_cohort_sample_list.wdl": {
+      "key": "wf-common/wdl/tasks/write_cohort_sample_list.wdl",
+      "name": "",
+      "description": "",
+      "tasks": {
+        "write_cohort_sample_list": {
+          "key": "write_cohort_sample_list",
+          "digest": "",
+          "tests": []
+        }
+      }
+    },
+    "workflows/main.wdl": {
+      "key": "workflows/main.wdl",
+      "name": "",
+      "description": "",
+      "tasks": {
+        "merge_runs": {
+          "key": "merge_runs",
+          "digest": "",
+          "tests": []
+        }
+      }
+    },
+    "workflows/structs.wdl": {
+      "key": "workflows/structs.wdl",
+      "name": "",
+      "description": "",
+      "tasks": {}
+    },
+    "workflows/postprocess/postprocess.wdl": {
+      "key": "workflows/postprocess/postprocess.wdl",
+      "name": "",
+      "description": "",
+      "tasks": {
+        "prep_parse_sample": {
+          "key": "prep_parse_sample",
+          "digest": "",
+          "tests": []
+        },
+        "merge_and_plot_qc_metrics": {
+          "key": "merge_and_plot_qc_metrics",
+          "digest": "",
+          "tests": []
+        },
+        "filter": {
+          "key": "filter",
+          "digest": "",
+          "tests": []
+        },
+        "map_cell_types": {
+          "key": "map_cell_types",
+          "digest": "",
+          "tests": []
+        },
+        "add_mapped_cell_types": {
+          "key": "add_mapped_cell_types",
+          "digest": "",
+          "tests": []
+        }
+      }
+    },
+    "workflows/split_pipe/split_pipe.wdl": {
+      "key": "workflows/split_pipe/split_pipe.wdl",
+      "name": "",
+      "description": "",
+      "tasks": {
+        "make_reference": {
+          "key": "make_reference",
+          "digest": "",
+          "tests": []
+        },
+        "split_pipe_sublibrary": {
+          "key": "split_pipe_sublibrary",
+          "digest": "",
+          "tests": []
+        },
+        "combine_sublibraries": {
+          "key": "combine_sublibraries",
+          "digest": "",
+          "tests": []
+        }
+      }
+    }
+  },
+  "engines": {
+    "asap-cromwell": {
+      "key": "asap-cromwell",
+      "enabled": true,
+      "name": ""
+    }
+  },
+  "test_params": {
+    "global_params": {},
+    "engine_params": {}
+  }
+}
