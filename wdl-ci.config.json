@@ -73,7 +73,7 @@
       "tasks": {
         "merge_runs": {
           "key": "merge_runs",
-          "digest": "",
+          "digest": "vw3gajuzw3hld5n4wi25cghtgqmdc5ip",
           "tests": [
             {
               "inputs": {
@@ -176,7 +176,7 @@
         },
         "filter": {
           "key": "filter",
-          "digest": "",
+          "digest": "kcyakiyefgnkkere4ihlhk7uwfrsi43f",
           "tests": [
             {
               "inputs": {
@@ -226,7 +226,7 @@
         },
         "map_cell_types": {
           "key": "map_cell_types",
-          "digest": "",
+          "digest": "qndyr65eya3ohoao6bgujv7ijmgkv6mi",
           "tests": [
             {
               "inputs": {
@@ -270,7 +270,7 @@
         },
         "add_mapped_cell_types": {
           "key": "add_mapped_cell_types",
-          "digest": "",
+          "digest": "6tomfemi23tixtsf5skl6a6xeqjn3hm6",
           "tests": [
             {
               "inputs": {
