@@ -19,3 +19,8 @@ __pycache__/*
 
 # split-pipe zip
 docker/split_pipe/split-pipe-v*.zip
+
+# Documents/notes
+test_logs/
+working_docs/
+outputs/

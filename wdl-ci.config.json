@@ -1,0 +1,380 @@
+{
+  "workflows": {
+    "wf-common/wdl/structs.wdl": {
+      "key": "wf-common/wdl/structs.wdl",
+      "name": "",
+      "description": "",
+      "tasks": {}
+    },
+    "wf-common/wdl/tasks/fastqc.wdl": {
+      "key": "wf-common/wdl/tasks/fastqc.wdl",
+      "name": "",
+      "description": "",
+      "tasks": {
+        "fastqc": {
+          "key": "fastqc",
+          "digest": "",
+          "tests": []
+        }
+      }
+    },
+    "wf-common/wdl/tasks/get_workflow_metadata.wdl": {
+      "key": "wf-common/wdl/tasks/get_workflow_metadata.wdl",
+      "name": "",
+      "description": "",
+      "tasks": {
+        "get_workflow_metadata": {
+          "key": "get_workflow_metadata",
+          "digest": "",
+          "tests": []
+        }
+      }
+    },
+    "wf-common/wdl/tasks/multiqc.wdl": {
+      "key": "wf-common/wdl/tasks/multiqc.wdl",
+      "name": "",
+      "description": "",
+      "tasks": {
+        "multiqc": {
+          "key": "multiqc",
+          "digest": "",
+          "tests": []
+        }
+      }
+    },
+    "wf-common/wdl/tasks/upload_final_outputs.wdl": {
+      "key": "wf-common/wdl/tasks/upload_final_outputs.wdl",
+      "name": "",
+      "description": "",
+      "tasks": {
+        "upload_final_outputs": {
+          "key": "upload_final_outputs",
+          "digest": "",
+          "tests": []
+        }
+      }
+    },
+    "wf-common/wdl/tasks/write_cohort_sample_list.wdl": {
+      "key": "wf-common/wdl/tasks/write_cohort_sample_list.wdl",
+      "name": "",
+      "description": "",
+      "tasks": {
+        "write_cohort_sample_list": {
+          "key": "write_cohort_sample_list",
+          "digest": "",
+          "tests": []
+        }
+      }
+    },
+    "workflows/main.wdl": {
+      "key": "workflows/main.wdl",
+      "name": "",
+      "description": "",
+      "tasks": {
+        "merge_runs": {
+          "key": "merge_runs",
+          "digest": "vw3gajuzw3hld5n4wi25cghtgqmdc5ip",
+          "tests": [
+            {
+              "inputs": {
+                "cleaned_run_adata_objects": [
+                  "${input_resources_file_path}/${postprocess_workflow_name}/${asap_dataset_id}.PB-001.mmc.h5ad",
+                  "${input_resources_file_path}/${postprocess_workflow_name}/${asap_dataset_id}.PB-002.mmc.h5ad"
+                ],
+                "asap_dataset_id": "${asap_dataset_id}",
+                "raw_data_path": "${postprocess_raw_data_path}",
+                "workflow_info": "${workflow_info}",
+                "billing_project": "${billing_project}",
+                "container_registry": "${container_registry}",
+                "zones": "${zones}"
+              },
+              "output_tests": {
+                "merged_run_adata_object": {
+                  "value": "${input_resources_file_path}/${postprocess_workflow_name}/${asap_dataset_id}.merged.mmc.h5ad",
+                  "test_tasks": [
+                    "compare_file_basename",
+                    "check_hdf5"
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "workflows/structs.wdl": {
+      "key": "workflows/structs.wdl",
+      "name": "",
+      "description": "",
+      "tasks": {}
+    },
+    "workflows/postprocess/postprocess.wdl": {
+      "key": "workflows/postprocess/postprocess.wdl",
+      "name": "",
+      "description": "",
+      "tasks": {
+        "prep_parse_sample": {
+          "key": "prep_parse_sample",
+          "digest": "",
+          "tests": []
+        },
+        "merge_and_plot_qc_metrics": {
+          "key": "merge_and_plot_qc_metrics",
+          "digest": "vqny5b43zsra6t4ils2s5q6o5bgsiajo",
+          "tests": [
+            {
+              "inputs": {
+                "output_prefix": "${run_prefix}",
+                "merge_keys": [
+                  "${run_id}.63B",
+                  "${run_id}.pool_2"
+                ],
+                "prepped_adata_objects": [
+                  "${input_resources_file_path}/${postprocess_workflow_name}/${run_prefix}.63B.prepped.h5ad",
+                  "${input_resources_file_path}/${postprocess_workflow_name}/${run_prefix}.pool_2.prepped.h5ad"
+                ],
+                "raw_data_path": "${postprocess_raw_data_path}",
+                "workflow_info": "${workflow_info}",
+                "billing_project": "${billing_project}",
+                "container_registry": "${container_registry}",
+                "zones": "${zones}"
+              },
+              "output_tests": {
+                "merged_adata_object": {
+                  "value": "${input_resources_file_path}/${postprocess_workflow_name}/${run_prefix}.merged_unfiltered.h5ad",
+                  "test_tasks": [
+                    "compare_file_basename",
+                    "check_hdf5"
+                  ]
+                },
+                "qc_initial_metadata_csv": {
+                  "value": "${input_resources_file_path}/${postprocess_workflow_name}/${run_prefix}.initial_metadata.csv",
+                  "test_tasks": [
+                    "compare_file_basename",
+                    "check_empty_lines",
+                    "check_comma_separated",
+                    "count_columns"
+                  ]
+                },
+                "qc_plots_png": {
+                  "value": [
+                    "${input_resources_file_path}/${postprocess_workflow_name}/${run_prefix}.n_genes_by_counts.violin.png",
+                    "${input_resources_file_path}/${postprocess_workflow_name}/${run_prefix}.total_counts.violin.png",
+                    "${input_resources_file_path}/${postprocess_workflow_name}/${run_prefix}.pct_counts_mt.violin.png",
+                    "${input_resources_file_path}/${postprocess_workflow_name}/${run_prefix}.pct_counts_rb.violin.png",
+                    "${input_resources_file_path}/${postprocess_workflow_name}/${run_prefix}.doublet_score.violin.png"
+                  ],
+                  "test_tasks": [
+                    "compare_file_basename",
+                    "png_validator",
+                    "image_validator"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "filter": {
+          "key": "filter",
+          "digest": "kcyakiyefgnkkere4ihlhk7uwfrsi43f",
+          "tests": [
+            {
+              "inputs": {
+                "output_prefix": "${run_prefix}",
+                "merged_adata_object": "${input_resources_file_path}/${postprocess_workflow_name}/${run_prefix}.merged_unfiltered.h5ad",
+                "pct_counts_mt_max": "${pct_counts_mt_max}",
+                "doublet_score_max": "${doublet_score_max}",
+                "total_counts_limits": "${total_counts_limits}",
+                "n_genes_by_counts_limits": "${n_genes_by_counts_limits}",
+                "n_mads_lower": "${n_mads_lower}",
+                "n_mads_upper": "${n_mads_upper}",
+                "raw_data_path": "${postprocess_raw_data_path}",
+                "workflow_info": "${workflow_info}",
+                "billing_project": "${billing_project}",
+                "container_registry": "${container_registry}",
+                "zones": "${zones}"
+              },
+              "output_tests": {
+                "filtered_adata_object": {
+                  "value": "${input_resources_file_path}/${postprocess_workflow_name}/${run_prefix}.filtered.h5ad",
+                  "test_tasks": [
+                    "compare_file_basename",
+                    "check_hdf5"
+                  ]
+                },
+                "unassigned_removed_cells_csv": {
+                  "value": "${input_resources_file_path}/${postprocess_workflow_name}/${run_prefix}.unassigned_removed_cells.csv",
+                  "test_tasks": [
+                    "compare_file_basename",
+                    "check_empty_lines",
+                    "check_comma_separated",
+                    "count_columns"
+                  ]
+                },
+                "filtered_out_cells_csv": {
+                  "value": "${input_resources_file_path}/${postprocess_workflow_name}/${run_prefix}.filtered_out_cells.csv",
+                  "test_tasks": [
+                    "compare_file_basename",
+                    "check_empty_lines",
+                    "check_comma_separated",
+                    "count_columns"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "map_cell_types": {
+          "key": "map_cell_types",
+          "digest": "qndyr65eya3ohoao6bgujv7ijmgkv6mi",
+          "tests": [
+            {
+              "inputs": {
+                "output_prefix": "${run_prefix}",
+                "filtered_adata_object": "${input_resources_file_path}/${postprocess_workflow_name}/${run_prefix}.filtered.h5ad",
+                "mmc_taxonomy": "${mmc_taxonomy}",
+                "allen_brain_mmc_precomputed_stats_h5": "${input_file_path}/precomputed_stats.20231120.sea_ad.MTG.h5",
+                "raw_data_path": "${postprocess_raw_data_path}",
+                "workflow_info": "${workflow_info}",
+                "billing_project": "${billing_project}",
+                "container_registry": "${container_registry}",
+                "zones": "${zones}"
+              },
+              "output_tests": {
+                "mmc_extended_results_json": {
+                  "value": "${input_resources_file_path}/${postprocess_workflow_name}/${run_prefix}.mmc_otf_mapping.${mmc_taxonomy}.extended_results.json",
+                  "test_tasks": [
+                    "compare_file_basename",
+                    "check_empty_lines",
+                    "check_json"
+                  ]
+                },
+                "mmc_results_csv": {
+                  "value": "${input_resources_file_path}/${postprocess_workflow_name}/${run_prefix}.mmc_otf_mapping.${mmc_taxonomy}.results.csv",
+                  "test_tasks": [
+                    "compare_file_basename",
+                    "check_empty_lines",
+                    "count_columns"
+                  ]
+                },
+                "mmc_log_txt": {
+                  "value": "${input_resources_file_path}/${postprocess_workflow_name}/${run_prefix}.mmc_otf_mapping.${mmc_taxonomy}.log.txt",
+                  "test_tasks": [
+                    "compare_file_basename",
+                    "check_empty_lines"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "add_mapped_cell_types": {
+          "key": "add_mapped_cell_types",
+          "digest": "6tomfemi23tixtsf5skl6a6xeqjn3hm6",
+          "tests": [
+            {
+              "inputs": {
+                "output_prefix": "${run_prefix}",
+                "filtered_adata_object": "${input_resources_file_path}/${postprocess_workflow_name}/${run_prefix}.filtered.h5ad",
+                "mmc_results_csv": "${input_resources_file_path}/${postprocess_workflow_name}/${run_prefix}.mmc_otf_mapping.${mmc_taxonomy}.results.csv",
+                "raw_data_path": "${postprocess_raw_data_path}",
+                "workflow_info": "${workflow_info}",
+                "billing_project": "${billing_project}",
+                "container_registry": "${container_registry}",
+                "zones": "${zones}"
+              },
+              "output_tests": {
+                "mmc_adata_object": {
+                  "value": "${input_resources_file_path}/${postprocess_workflow_name}/${run_prefix}.mmc.h5ad",
+                  "test_tasks": [
+                    "compare_file_basename",
+                    "check_hdf5"
+                  ]
+                },
+                "mmc_results_parquet": {
+                  "value": "${input_resources_file_path}/${postprocess_workflow_name}/${run_prefix}.mmc_results.parquet",
+                  "test_tasks": [
+                    "compare_file_basename"
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "workflows/split_pipe/split_pipe.wdl": {
+      "key": "workflows/split_pipe/split_pipe.wdl",
+      "name": "",
+      "description": "",
+      "tasks": {
+        "make_reference": {
+          "key": "make_reference",
+          "digest": "",
+          "tests": []
+        },
+        "split_pipe_sublibrary": {
+          "key": "split_pipe_sublibrary",
+          "digest": "",
+          "tests": []
+        },
+        "combine_sublibraries": {
+          "key": "combine_sublibraries",
+          "digest": "",
+          "tests": []
+        }
+      }
+    }
+  },
+  "engines": {
+    "asap-cromwell": {
+      "key": "asap-cromwell",
+      "enabled": true,
+      "name": ""
+    }
+  },
+  "test_params": {
+    "global_params": {
+      "asap_dataset_id": "DS_PMDBS_0038",
+      "run_id": "PB-001",
+      "run_prefix": "${asap_dataset_id}.${run_id}",
+      "workflow_name": "pmdbs_split_pipe",
+      "workflow_version": "v1.0.0",
+      "workflow_release": "https://github.com/ASAP-CRN/split-pipe-wf/releases/tag/split_pipe_analysis-${workflow_version}",
+      "run_timestamp": "2026-11-07T00-00-00Z",
+      "workflow_info": [
+        [
+          "${run_timestamp}",
+          "${workflow_name}",
+          "${workflow_version}",
+          "${workflow_release}"
+        ]
+      ],
+      "postprocess_workflow_name": "postprocess",
+      "postprocess_workflow_version": "1.0.0",
+      "postprocess_raw_data_path": "gs://asap-wdl-ci/workflow_execution/${workflow_name}/${postprocess_workflow_name}/${postprocess_workflow_version}/${run_timestamp}",
+      "pct_counts_mt_max": 10,
+      "doublet_score_max": 0.2,
+      "total_counts_limits": [
+        500,
+        150000
+      ],
+      "n_genes_by_counts_limits": [
+        300,
+        15000
+      ],
+      "n_mads_lower": 3,
+      "n_mads_upper": 5,
+      "mmc_taxonomy": "SEAAD",
+      "billing_project": "dnastack-asap-parkinsons",
+      "container_registry": "us-central1-docker.pkg.dev/dnastack-asap-parkinsons/workflow-images",
+      "zones": "us-central1-c us-central1-f"
+    },
+    "engine_params": {
+      "asap-cromwell": {
+        "input_file_path": "gs://asap-workflow-dev/workflow-resources",
+        "input_resources_file_path": "gs://asap-wdl-ci/${workflow_name}"
+      }
+    }
+  }
+}
